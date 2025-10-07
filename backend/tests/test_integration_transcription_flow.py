@@ -10,7 +10,13 @@ import pytest
 
 from meetingai_backend.media.assets import load_media_assets
 from meetingai_backend.settings import Settings, set_settings
+from meetingai_backend.summarization import (
+    load_action_items,
+    load_summary_items,
+    load_summary_quality,
+)
 from meetingai_backend.tasks.ingest import process_uploaded_video
+from meetingai_backend.tasks.summarize import summarize_job
 from meetingai_backend.tasks.transcribe import transcribe_audio_for_job
 from meetingai_backend.transcription.segments import load_transcript_segments
 
@@ -22,18 +28,29 @@ def reset_settings() -> Iterator[None]:
     set_settings(None)
 
 
-def _copy_sample_video(tmp_path: Path) -> tuple[str, Path]:
+def _integration_output_root() -> Path:
+    project_root = Path(__file__).resolve().parents[2]
+    root = project_root / "storage" / "integration-tests"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _prepare_job_directory(job_id: str) -> Path:
+    job_dir = _integration_output_root() / job_id
+    if job_dir.exists():
+        shutil.rmtree(job_dir)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    return job_dir
+
+
+def _copy_sample_video(job_dir: Path) -> Path:
     sample_path = Path(__file__).parent / "data" / "2025-05-23 13-03-45.mov"
     if not sample_path.exists():
         pytest.skip("sample video not available for integration test")
 
-    job_id = "job-integration"
-    job_dir = tmp_path / job_id
-    job_dir.mkdir(parents=True, exist_ok=True)
-
     destination = job_dir / sample_path.name
     shutil.copy(sample_path, destination)
-    return job_id, destination
+    return destination
 
 
 def _load_dotenv_if_needed() -> None:
@@ -58,7 +75,9 @@ def _load_dotenv_if_needed() -> None:
 
 
 def test_video_upload_to_transcript_segments(tmp_path: Path) -> None:
-    job_id, video_path = _copy_sample_video(tmp_path)
+    job_id = f"job-integration-{tmp_path.name}"
+    job_directory = _prepare_job_directory(job_id)
+    video_path = _copy_sample_video(job_directory)
 
     _load_dotenv_if_needed()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -66,7 +85,7 @@ def test_video_upload_to_transcript_segments(tmp_path: Path) -> None:
         pytest.fail("OPENAI_API_KEY is not configured for integration test")
 
     settings = Settings(
-        upload_root=tmp_path,
+        upload_root=_integration_output_root(),
         redis_url="redis://localhost:6379/0",
         job_queue_name="meetingai:jobs",
         job_timeout_seconds=900,
@@ -86,7 +105,6 @@ def test_video_upload_to_transcript_segments(tmp_path: Path) -> None:
     chunk_paths = [Path(path) for path in ingest_result["audio_chunks"]]
     assert chunk_paths and all(path.exists() for path in chunk_paths)
 
-    job_directory = video_path.parent
     assets = load_media_assets(job_directory)
     chunk_assets = [asset for asset in assets if asset.kind == "audio_chunk"]
     assert len(chunk_assets) == len(chunk_paths)
@@ -113,3 +131,23 @@ def test_video_upload_to_transcript_segments(tmp_path: Path) -> None:
         {segment.language for segment in segments if segment.language}
     )
     assert reported_languages == detected_languages
+
+    summary_result = summarize_job(
+        job_id=job_id,
+        job_directory=str(job_directory),
+    )
+
+    assert summary_result["job_id"] == job_id
+    assert summary_result["summary_count"] >= 1
+    assert summary_result["action_item_count"] >= 0
+
+    summary_items = load_summary_items(job_directory)
+    assert summary_items
+    assert all(item.summary_text.strip() for item in summary_items)
+
+    action_items = load_action_items(job_directory)
+    assert len(action_items) == summary_result["action_item_count"]
+
+    quality_metrics = load_summary_quality(job_directory)
+    assert quality_metrics is not None
+    assert 0.0 <= quality_metrics.coverage_ratio <= 1.0
