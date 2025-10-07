@@ -1,0 +1,13 @@
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: isort (backend)
+        files: ^backend/.*\.py$
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        name: black (backend)
+        files: ^backend/.*\.py$

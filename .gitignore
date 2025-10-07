@@ -1,0 +1,20 @@
+# cache
+__pycache__/
+*.pyc
+.npm-cache
+
+# 動画ファイル
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# 環境設定ファイル
+.env
+
+# tool configs
+.serena/
+.uv-cache/
+backend/.venv/
+frontend/.next/
+frontend/node_modules/
