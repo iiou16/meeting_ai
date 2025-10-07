@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Tests load .env manually so the integration flow runs without shell exporting.
+import os
 import shutil
 from pathlib import Path
 from typing import Iterator
@@ -10,7 +12,6 @@ from meetingai_backend.media.assets import load_media_assets
 from meetingai_backend.settings import Settings, set_settings
 from meetingai_backend.tasks.ingest import process_uploaded_video
 from meetingai_backend.tasks.transcribe import transcribe_audio_for_job
-from meetingai_backend.transcription import ChunkTranscriptionResult
 from meetingai_backend.transcription.segments import load_transcript_segments
 
 
@@ -35,8 +36,34 @@ def _copy_sample_video(tmp_path: Path) -> tuple[str, Path]:
     return job_id, destination
 
 
-def test_video_upload_to_transcript_segments(tmp_path: Path, monkeypatch) -> None:
+def _load_dotenv_if_needed() -> None:
+    """Populate environment variables from the repository's .env file."""
+    project_root = Path(__file__).resolve().parents[2]
+    dotenv_path = project_root / ".env"
+    if not dotenv_path.exists():
+        return
+
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+
+        cleaned = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, cleaned)
+
+
+def test_video_upload_to_transcript_segments(tmp_path: Path) -> None:
     job_id, video_path = _copy_sample_video(tmp_path)
+
+    _load_dotenv_if_needed()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        pytest.fail("OPENAI_API_KEY is not configured for integration test")
 
     settings = Settings(
         upload_root=tmp_path,
@@ -44,7 +71,7 @@ def test_video_upload_to_transcript_segments(tmp_path: Path, monkeypatch) -> Non
         job_queue_name="meetingai:jobs",
         job_timeout_seconds=900,
         ffmpeg_path="ffmpeg",
-        openai_api_key="test-api-key",
+        openai_api_key=api_key,
     )
     set_settings(settings)
 
@@ -64,43 +91,6 @@ def test_video_upload_to_transcript_segments(tmp_path: Path, monkeypatch) -> Non
     chunk_assets = [asset for asset in assets if asset.kind == "audio_chunk"]
     assert len(chunk_assets) == len(chunk_paths)
 
-    def fake_transcribe_audio_chunks(
-        chunk_assets_param,
-        *,
-        config,
-        language,
-        prompt,
-        request_fn=None,
-        sleep=None,
-    ):
-        results: list[ChunkTranscriptionResult] = []
-        for index, asset in enumerate(chunk_assets_param):
-            results.append(
-                ChunkTranscriptionResult(
-                    asset_id=asset.asset_id,
-                    text=f"chunk-{index}",
-                    start_ms=asset.start_ms,
-                    end_ms=asset.end_ms,
-                    duration_ms=asset.duration_ms,
-                    language="ja",
-                    response={
-                        "segments": [
-                            {
-                                "start": 0.0,
-                                "end": asset.duration_ms / 1000.0,
-                                "text": f"segment-{index}",
-                            }
-                        ]
-                    },
-                )
-            )
-        return results
-
-    monkeypatch.setattr(
-        "meetingai_backend.tasks.transcribe.transcribe_audio_chunks",
-        fake_transcribe_audio_chunks,
-    )
-
     transcription_result = transcribe_audio_for_job(
         job_id=job_id,
         job_directory=str(job_directory),
@@ -108,12 +98,18 @@ def test_video_upload_to_transcript_segments(tmp_path: Path, monkeypatch) -> Non
 
     assert transcription_result["job_id"] == job_id
     assert transcription_result["chunk_count"] == len(chunk_assets)
-    assert transcription_result["segment_count"] == len(chunk_assets)
-    assert transcription_result["languages"] == ["ja"]
 
     segments_path = Path(transcription_result["segments_path"])
     assert segments_path.exists()
 
     segments = load_transcript_segments(job_directory)
-    assert len(segments) == len(chunk_assets)
-    assert segments[0].text == "segment-0"
+    assert segments
+    assert transcription_result["segment_count"] == len(segments)
+    assert all(segment.text.strip() for segment in segments)
+
+    reported_languages = transcription_result["languages"]
+    assert isinstance(reported_languages, list)
+    detected_languages = sorted(
+        {segment.language for segment in segments if segment.language}
+    )
+    assert reported_languages == detected_languages
