@@ -92,10 +92,25 @@ def enqueue_transcription_job(
     )
 
 
+def enqueue_summary_job(
+    *,
+    queue: JobQueueProtocol,
+    job_id: str,
+    job_directory: str,
+) -> Any:
+    """Schedule meeting summarization for a completed transcription."""
+    kwargs = {"job_id": job_id, "job_directory": job_directory}
+    return queue.enqueue(
+        "meetingai_backend.tasks.summarize.summarize_job",
+        kwargs=kwargs,
+    )
+
+
 __all__ = [
     "JobQueueProtocol",
     "RedisJobQueue",
     "enqueue_transcription_job",
+    "enqueue_summary_job",
     "enqueue_video_ingest_job",
     "get_job_queue",
     "set_job_queue",

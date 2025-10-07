@@ -27,6 +27,14 @@ class Settings:
     openai_retry_backoff_seconds: float = 1.0
     openai_max_retry_backoff_seconds: float | None = 30.0
     openai_requests_per_minute: int | None = None
+    openai_summary_model: str = "gpt-4o-mini"
+    openai_summary_temperature: float = 0.2
+    openai_summary_request_timeout_seconds: float = 240.0
+    openai_summary_max_attempts: int = 3
+    openai_summary_retry_backoff_seconds: float = 2.0
+    openai_summary_max_retry_backoff_seconds: float | None = 60.0
+    openai_summary_requests_per_minute: int | None = None
+    openai_summary_max_output_tokens: int = 1200
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -107,6 +115,72 @@ class Settings:
                     "MEETINGAI_TRANSCRIBE_REQUESTS_PER_MINUTE must be an integer."
                 ) from exc
 
+        summary_model = os.getenv("MEETINGAI_SUMMARY_MODEL", "gpt-4o-mini")
+        summary_temperature_raw = os.getenv("MEETINGAI_SUMMARY_TEMPERATURE", "0.2")
+        summary_timeout_raw = os.getenv("MEETINGAI_SUMMARY_TIMEOUT", "240")
+        summary_max_attempts_raw = os.getenv("MEETINGAI_SUMMARY_MAX_ATTEMPTS", "3")
+        summary_backoff_raw = os.getenv("MEETINGAI_SUMMARY_BACKOFF_SECONDS", "2.0")
+        summary_max_backoff_raw = os.getenv(
+            "MEETINGAI_SUMMARY_MAX_BACKOFF_SECONDS", "60.0"
+        )
+        summary_requests_per_minute_raw = os.getenv(
+            "MEETINGAI_SUMMARY_REQUESTS_PER_MINUTE"
+        )
+        summary_max_tokens_raw = os.getenv(
+            "MEETINGAI_SUMMARY_MAX_OUTPUT_TOKENS", "1200"
+        )
+
+        try:
+            summary_temperature = float(summary_temperature_raw)
+        except ValueError as exc:
+            raise ValueError("MEETINGAI_SUMMARY_TEMPERATURE must be numeric.") from exc
+
+        try:
+            summary_timeout_seconds = float(summary_timeout_raw)
+        except ValueError as exc:
+            raise ValueError("MEETINGAI_SUMMARY_TIMEOUT must be numeric.") from exc
+
+        try:
+            summary_max_attempts = int(summary_max_attempts_raw)
+        except ValueError as exc:
+            raise ValueError(
+                "MEETINGAI_SUMMARY_MAX_ATTEMPTS must be an integer."
+            ) from exc
+
+        try:
+            summary_retry_backoff_seconds = float(summary_backoff_raw)
+        except ValueError as exc:
+            raise ValueError(
+                "MEETINGAI_SUMMARY_BACKOFF_SECONDS must be numeric."
+            ) from exc
+
+        if summary_max_backoff_raw in (None, "", "none", "None"):
+            summary_max_retry_backoff_seconds: float | None = None
+        else:
+            try:
+                summary_max_retry_backoff_seconds = float(summary_max_backoff_raw)
+            except ValueError as exc:
+                raise ValueError(
+                    "MEETINGAI_SUMMARY_MAX_BACKOFF_SECONDS must be numeric or empty."
+                ) from exc
+
+        if summary_requests_per_minute_raw in (None, "", "none", "None"):
+            summary_requests_per_minute: int | None = None
+        else:
+            try:
+                summary_requests_per_minute = int(summary_requests_per_minute_raw)
+            except ValueError as exc:
+                raise ValueError(
+                    "MEETINGAI_SUMMARY_REQUESTS_PER_MINUTE must be an integer."
+                ) from exc
+
+        try:
+            summary_max_output_tokens = int(summary_max_tokens_raw)
+        except ValueError as exc:
+            raise ValueError(
+                "MEETINGAI_SUMMARY_MAX_OUTPUT_TOKENS must be an integer."
+            ) from exc
+
         return cls(
             upload_root=upload_root.resolve(strict=False),
             redis_url=redis_url,
@@ -122,6 +196,14 @@ class Settings:
             openai_retry_backoff_seconds=retry_backoff_seconds,
             openai_max_retry_backoff_seconds=max_retry_backoff_seconds,
             openai_requests_per_minute=requests_per_minute,
+            openai_summary_model=summary_model,
+            openai_summary_temperature=summary_temperature,
+            openai_summary_request_timeout_seconds=summary_timeout_seconds,
+            openai_summary_max_attempts=summary_max_attempts,
+            openai_summary_retry_backoff_seconds=summary_retry_backoff_seconds,
+            openai_summary_max_retry_backoff_seconds=summary_max_retry_backoff_seconds,
+            openai_summary_requests_per_minute=summary_requests_per_minute,
+            openai_summary_max_output_tokens=summary_max_output_tokens,
         )
 
 
