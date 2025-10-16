@@ -8,6 +8,7 @@ import {
   JobSummary,
   fetchJobs,
   uploadVideo,
+  deleteJob,
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
 
@@ -32,8 +33,12 @@ function formatDateTime(input: string, language: Language): string {
   }
 }
 
-function formatProgress(value: number): string {
-  return `${Math.round(value * 100)}%`;
+function formatStageLabel(
+  job: JobSummary,
+  copy: ReturnType<typeof getCopy>,
+): string {
+  const label = copy.stageLabels[job.stage_key] ?? job.stage_key;
+  return `${job.stage_index}/${job.stage_count} · ${label}`;
 }
 
 function formatStatus(
@@ -62,6 +67,9 @@ export default function Dashboard({
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
+  const [notificationType, setNotificationType] = useState<"success" | "error" | null>(null);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -155,6 +163,29 @@ export default function Dashboard({
     loadJobs().catch(() => {
       /* handled in loadJobs */
     });
+  };
+
+  const handleDeleteJob = async (jobId: string) => {
+    if (!window.confirm(copy.deleteConfirm(jobId))) {
+      return;
+    }
+
+    setDeletingJobId(jobId);
+    setNotification(null);
+    setNotificationType(null);
+
+    try {
+      await deleteJob(jobId);
+      setNotification(copy.deleteSuccess);
+      setNotificationType("success");
+      await loadJobs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setNotification(copy.deleteError + message);
+      setNotificationType("error");
+    } finally {
+      setDeletingJobId(null);
+    }
   };
 
   const renderLastUpdated = () => {
@@ -277,6 +308,18 @@ export default function Dashboard({
           </div>
         </div>
 
+        {notification ? (
+          <p
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              notificationType === "success"
+                ? "border-emerald-400 bg-emerald-500/10 text-emerald-200"
+                : "border-red-500 bg-red-500/10 text-red-200"
+            }`}
+          >
+            {notification}
+          </p>
+        ) : null}
+
         {jobsError ? (
           <p className="rounded-lg border border-red-500 bg-red-500/10 px-4 py-3 text-sm text-red-200">
             {jobsError}
@@ -331,7 +374,7 @@ export default function Dashboard({
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-200">
-                        {formatProgress(job.progress)}
+                        {formatStageLabel(job, copy)}
                       </td>
                       <td className="px-4 py-3 text-slate-200">
                         {formatDateTime(job.updated_at, language)}
@@ -340,12 +383,26 @@ export default function Dashboard({
                         {job.summary_count} / {job.action_item_count}
                       </td>
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/meetings/${encodeURIComponent(job.job_id)}?lang=${language}`}
-                          className="rounded-lg border border-blue-500 px-4 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/10"
-                        >
-                          {copy.viewDetails}
-                        </Link>
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href={`/meetings/${encodeURIComponent(job.job_id)}?lang=${language}`}
+                            className="rounded-lg border border-blue-500 px-4 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/10"
+                          >
+                            {copy.viewDetails}
+                          </Link>
+                          {job.can_delete && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteJob(job.job_id)}
+                              disabled={deletingJobId === job.job_id}
+                              className="rounded-lg border border-red-500 px-4 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                            >
+                              {deletingJobId === job.job_id
+                                ? copy.deleteInProgress
+                                : copy.deleteButton}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
