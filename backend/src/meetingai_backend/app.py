@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from .routers import health, videos
+from .routers import health, jobs, meetings, videos
 from .settings import get_settings
 
 
@@ -15,5 +15,7 @@ def create_app() -> FastAPI:
     app.state.settings = settings
 
     app.include_router(health.router)
+    app.include_router(jobs.router)
+    app.include_router(meetings.router)
     app.include_router(videos.router)
     return app
