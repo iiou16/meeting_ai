@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..settings import Settings, get_settings
@@ -131,6 +133,23 @@ def get_meeting(
         segments=[TranscriptSegmentResponse.from_segment(seg) for seg in segments],
         quality_metrics=quality.to_dict() if quality else None,
     )
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_meeting(job_id: str, settings: Settings = Depends(get_settings)) -> Response:
+    """Delete all artefacts for the specified job."""
+    job_directory = _resolve_job_directory(settings, job_id)
+
+    try:
+        shutil.rmtree(job_directory)
+    except FileNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "meeting not found") from None
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "failed to delete meeting artefacts",
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 __all__ = ["router"]
