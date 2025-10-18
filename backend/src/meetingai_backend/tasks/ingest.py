@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Sequence
 
+from ..job_state import JOB_STAGE_UPLOAD, clear_job_failure, mark_job_failed
+from ..jobs import enqueue_transcription_job, get_job_queue
 from ..media import (
     AudioExtractionConfig,
     MediaAsset,
@@ -13,6 +16,8 @@ from ..media import (
 )
 from ..media.chunking import AudioChunkSpec, split_wav_into_chunks
 from ..settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def _build_master_asset(
@@ -47,48 +52,70 @@ def _build_master_asset(
 def process_uploaded_video(*, job_id: str, source_path: str) -> dict[str, object]:
     """Process an uploaded video by extracting audio and recording metadata."""
     path = Path(source_path)
+    job_directory = path.parent
+    clear_job_failure(job_directory)
+
     if not path.exists():
-        raise FileNotFoundError(
+        error = FileNotFoundError(
             f"source file for job {job_id} was not found: {source_path}"
         )
+        mark_job_failed(job_directory, stage=JOB_STAGE_UPLOAD, error=error)
+        raise error
 
     settings = get_settings()
     config = AudioExtractionConfig(ffmpeg_path=settings.ffmpeg_path)
-    audio_path = extract_audio_to_wav(path, config=config)
 
-    job_directory = path.parent
-    chunk_specs: list[AudioChunkSpec] = split_wav_into_chunks(
-        audio_path,
-        job_id=job_id,
-        parent_asset_id=None,
-        output_dir=job_directory / "audio_chunks",
-    )
+    try:
+        audio_path = extract_audio_to_wav(path, config=config)
 
-    if not chunk_specs:
-        raise RuntimeError("audio chunking produced no results")
+        chunk_specs: list[AudioChunkSpec] = split_wav_into_chunks(
+            audio_path,
+            job_id=job_id,
+            parent_asset_id=None,
+            output_dir=job_directory / "audio_chunks",
+        )
 
-    chunk_assets = [spec.asset for spec in chunk_specs]
-    master_asset = _build_master_asset(
-        job_id=job_id,
-        audio_path=audio_path,
-        chunk_assets=chunk_assets,
-        source_video=path,
-    )
+        if not chunk_specs:
+            raise RuntimeError("audio chunking produced no results")
 
-    # Update parent references now that we have the master asset id.
-    for chunk in chunk_assets:
-        chunk.parent_asset_id = master_asset.asset_id
+        chunk_assets = [spec.asset for spec in chunk_specs]
+        master_asset = _build_master_asset(
+            job_id=job_id,
+            audio_path=audio_path,
+            chunk_assets=chunk_assets,
+            source_video=path,
+        )
 
-    assets = [master_asset, *chunk_assets]
-    manifest_path = dump_media_assets(job_directory, assets)
+        # Update parent references now that we have the master asset id.
+        for chunk in chunk_assets:
+            chunk.parent_asset_id = master_asset.asset_id
 
-    return {
-        "job_id": job_id,
-        "source_path": str(path.resolve()),
-        "audio_path": str(audio_path.resolve()),
-        "media_assets_path": str(manifest_path.resolve()),
-        "audio_chunks": [str(spec.path.resolve()) for spec in chunk_specs],
-    }
+        assets = [master_asset, *chunk_assets]
+        manifest_path = dump_media_assets(job_directory, assets)
+
+        try:
+            queue = get_job_queue(settings)
+            enqueue_transcription_job(
+                queue=queue,
+                job_id=job_id,
+                job_directory=str(job_directory),
+            )
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception(
+                "Failed to enqueue transcription job",
+                extra={"job_id": job_id, "job_directory": str(job_directory)},
+            )
+
+        return {
+            "job_id": job_id,
+            "source_path": str(path.resolve()),
+            "audio_path": str(audio_path.resolve()),
+            "media_assets_path": str(manifest_path.resolve()),
+            "audio_chunks": [str(spec.path.resolve()) for spec in chunk_specs],
+        }
+    except Exception as exc:
+        mark_job_failed(job_directory, stage=JOB_STAGE_UPLOAD, error=exc)
+        raise
 
 
 __all__ = ["process_uploaded_video"]

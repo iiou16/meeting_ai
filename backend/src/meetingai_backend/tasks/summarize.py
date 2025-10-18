@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ..job_state import JOB_STAGE_SUMMARY, clear_job_failure, mark_job_failed
 from ..settings import Settings, get_settings
 from ..summarization import (
     OpenAISummarizationConfig,
@@ -46,43 +47,51 @@ def summarize_job(
     """Generate summaries and action items for a processed transcription."""
     job_path = Path(job_directory)
     if not job_path.exists():
-        raise FileNotFoundError(f"Job directory does not exist: {job_directory}")
+        error = FileNotFoundError(f"Job directory does not exist: {job_directory}")
+        mark_job_failed(job_path, stage=JOB_STAGE_SUMMARY, error=error)
+        raise error
 
-    segments = load_transcript_segments(job_path)
-    if not segments:
-        raise RuntimeError(
-            "Transcription segments are not available; run transcription first."
+    clear_job_failure(job_path)
+
+    try:
+        segments = load_transcript_segments(job_path)
+        if not segments:
+            raise RuntimeError(
+                "Transcription segments are not available; run transcription first."
+            )
+
+        settings = get_settings()
+        config = _build_summary_config(settings)
+
+        language_hint = next(
+            (segment.language for segment in segments if segment.language), None
         )
 
-    settings = get_settings()
-    config = _build_summary_config(settings)
+        bundle = generate_meeting_summary(
+            job_id=job_id,
+            segments=segments,
+            config=config,
+            language_hint=language_hint,
+            request_fn=request_fn,
+        )
 
-    language_hint = next(
-        (segment.language for segment in segments if segment.language), None
-    )
+        summary_path = dump_summary_items(job_path, bundle.summary_items)
+        action_items_path = dump_action_items(job_path, bundle.action_items)
+        quality_path = dump_summary_quality(job_path, bundle.quality)
 
-    bundle = generate_meeting_summary(
-        job_id=job_id,
-        segments=segments,
-        config=config,
-        language_hint=language_hint,
-        request_fn=request_fn,
-    )
-
-    summary_path = dump_summary_items(job_path, bundle.summary_items)
-    action_items_path = dump_action_items(job_path, bundle.action_items)
-    quality_path = dump_summary_quality(job_path, bundle.quality)
-
-    return {
-        "job_id": job_id,
-        "summary_count": len(bundle.summary_items),
-        "action_item_count": len(bundle.action_items),
-        "summary_path": str(summary_path.resolve()),
-        "action_items_path": str(action_items_path.resolve()),
-        "quality_path": str(quality_path.resolve()),
-        "quality_metrics": bundle.quality.to_dict(),
-        "model_metadata": dict(bundle.model_metadata),
-    }
+        return {
+            "job_id": job_id,
+            "summary_count": len(bundle.summary_items),
+            "action_item_count": len(bundle.action_items),
+            "summary_path": str(summary_path.resolve()),
+            "action_items_path": str(action_items_path.resolve()),
+            "quality_path": str(quality_path.resolve()),
+            "quality_metrics": bundle.quality.to_dict(),
+            "model_metadata": dict(bundle.model_metadata),
+        }
+    except Exception as exc:
+        mark_job_failed(job_path, stage=JOB_STAGE_SUMMARY, error=exc)
+        raise
 
 
 __all__ = ["summarize_job"]

@@ -76,6 +76,27 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
         fake_split,
     )
 
+    queued: dict[str, str] = {}
+
+    def fake_get_job_queue(settings_param):
+        assert settings_param is settings
+        return object()
+
+    def fake_enqueue_transcription_job(
+        *, queue, job_id, job_directory, language=None, prompt=None
+    ):
+        queued["job_id"] = job_id
+        queued["job_directory"] = job_directory
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_job_queue",
+        fake_get_job_queue,
+    )
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.enqueue_transcription_job",
+        fake_enqueue_transcription_job,
+    )
+
     result = process_uploaded_video(job_id="abc123", source_path=str(video))
 
     assert result["job_id"] == "abc123"
@@ -96,6 +117,8 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
     chunk_asset = next(item for item in manifest if item["kind"] == "audio_chunk")
     assert chunk_asset["parent_asset_id"] == master_asset["asset_id"]
     assert master_asset["duration_ms"] >= chunk_asset["duration_ms"]
+    assert queued["job_id"] == "abc123"
+    assert queued["job_directory"] == str(tmp_path)
 
 
 def test_process_uploaded_video_missing_source(tmp_path) -> None:

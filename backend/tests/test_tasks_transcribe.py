@@ -61,7 +61,9 @@ def _prepare_job_directory(tmp_path: Path) -> tuple[Path, MediaAsset, MediaAsset
     return job_dir, master_asset, chunk_asset
 
 
-def test_transcribe_audio_for_job_persists_segments(tmp_path: Path) -> None:
+def test_transcribe_audio_for_job_persists_segments(
+    tmp_path: Path, monkeypatch
+) -> None:
     job_dir, _master, chunk_asset = _prepare_job_directory(tmp_path)
 
     settings = Settings(
@@ -88,6 +90,22 @@ def test_transcribe_audio_for_job_persists_segments(tmp_path: Path) -> None:
             ],
         }
 
+    enqueued: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.transcribe.get_job_queue",
+        lambda _: object(),
+    )
+
+    def fake_enqueue_summary_job(*, queue, job_id, job_directory):
+        enqueued["job_id"] = job_id
+        enqueued["job_directory"] = job_directory
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.transcribe.enqueue_summary_job",
+        fake_enqueue_summary_job,
+    )
+
     result = transcribe_audio_for_job(
         job_id="job-001",
         job_directory=str(job_dir),
@@ -109,6 +127,8 @@ def test_transcribe_audio_for_job_persists_segments(tmp_path: Path) -> None:
     assert segments[0].speaker_label == "A"
     assert segments[1].start_ms == 1_000
     assert segments[1].end_ms == 2_000
+    assert enqueued["job_id"] == "job-001"
+    assert enqueued["job_directory"] == str(job_dir)
 
 
 def test_transcribe_audio_for_job_requires_api_key(tmp_path: Path) -> None:

@@ -111,11 +111,19 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
     assert completed["summary_count"] == 1
     assert completed["action_item_count"] == 1
     assert completed["progress"] == 1.0
+    assert completed["stage_index"] == 4
+    assert completed["stage_count"] == 4
+    assert completed["stage_key"] == "summary"
     assert completed["languages"] == ["ja"]
+    assert completed["can_delete"] is True
 
     pending = next(job for job in jobs if job["job_id"] == "job-pending")
     assert pending["status"] == "pending"
-    assert pending["progress"] == 0.2
+    assert pending["progress"] == 0.25
+    assert pending["stage_index"] == 1
+    assert pending["stage_count"] == 4
+    assert pending["stage_key"] == "upload"
+    assert pending["can_delete"] is False
 
     detail = client.get("/api/jobs/job-complete")
     assert detail.status_code == 200
