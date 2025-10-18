@@ -24,6 +24,12 @@ type BaseCopy = {
   };
   statusLabels: Record<string, string>;
   statusDescriptions: Record<string, string>;
+  stageLabels: Record<string, string>;
+  deleteButton: string;
+  deleteInProgress: string;
+  deleteSuccess: string;
+  deleteError: string;
+  deleteConfirm: (jobId: string) => string;
   viewDetails: string;
   refreshButton: string;
   lastUpdatedPrefix: string;
@@ -81,6 +87,17 @@ function jaCopy(): BaseCopy {
       completed: "すべての処理が完了しました。",
       failed: "エラーが発生しました。ログを確認してください。",
     },
+    stageLabels: {
+      upload: "アップロード完了",
+      chunking: "音声チャンク生成",
+      transcription: "文字起こし生成",
+      summary: "要約生成",
+    },
+    deleteButton: "ジョブを削除",
+    deleteInProgress: "削除中...",
+    deleteSuccess: "ジョブを削除しました。",
+    deleteError: "ジョブの削除に失敗しました: ",
+    deleteConfirm: (jobId: string) => `ジョブ ${jobId} を削除しますか？`,
     viewDetails: "詳細を見る",
     refreshButton: "一覧を更新",
     lastUpdatedPrefix: "最終更新",
@@ -143,6 +160,17 @@ function enCopy(): BaseCopy {
       completed: "Processing finished successfully.",
       failed: "Processing failed. Check worker logs.",
     },
+    stageLabels: {
+      upload: "Upload complete",
+      chunking: "Audio chunking",
+      transcription: "Transcription",
+      summary: "Summary",
+    },
+    deleteButton: "Delete job",
+    deleteInProgress: "Deleting…",
+    deleteSuccess: "Job deleted successfully.",
+    deleteError: "Failed to delete job: ",
+    deleteConfirm: (jobId: string) => `Delete job ${jobId}?`,
     viewDetails: "View details",
     refreshButton: "Refresh list",
     lastUpdatedPrefix: "Last updated",

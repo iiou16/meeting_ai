@@ -19,6 +19,10 @@ export interface JobSummary {
   created_at: string;
   updated_at: string;
   progress: number;
+  stage_index: number;
+  stage_count: number;
+  stage_key: string;
+  can_delete: boolean;
   duration_ms?: number | null;
   languages: string[];
   summary_count: number;
@@ -88,6 +92,17 @@ export async function fetchMeeting(jobId: string): Promise<MeetingDetail> {
   return requestJson<MeetingDetail>(
     `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}`,
   );
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Delete failed with status ${response.status}`);
+  }
 }
 
 type UploadOptions = {
