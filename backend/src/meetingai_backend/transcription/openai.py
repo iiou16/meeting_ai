@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -163,6 +164,12 @@ def transcribe_audio_chunks(
                 )
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code if exc.response is not None else None
+                error_text = None
+                if exc.response is not None:
+                    try:
+                        error_text = exc.response.text
+                    except Exception:  # pragma: no cover - best effort
+                        error_text = None
                 if status in _RETRIABLE_STATUS and attempt < config.max_attempts:
                     delay = _select_retry_delay(
                         attempt=attempt,
@@ -174,7 +181,7 @@ def transcribe_audio_chunks(
                     continue
 
                 raise TranscriptionError(
-                    f"transcription failed with status {status}",
+                    f"transcription failed with status {status}: {error_text}",
                     asset_id=asset.asset_id,
                     status_code=status,
                 ) from exc
@@ -243,6 +250,17 @@ def _call_openai_transcription_api(
         headers["User-Agent"] = config.user_agent
 
     data: dict[str, str] = {"model": config.model}
+    normalized_model = config.model.lower()
+    if normalized_model.endswith("-diarize"):
+        data["response_format"] = "diarized_json"
+        data["chunking_strategy"] = json.dumps({"type": "server_vad"})
+    elif "gpt-4o-transcribe" in normalized_model:
+        # gpt-4o transcription models reject `verbose_json`; use `json` plus segment granularity.
+        data["response_format"] = "json"
+        data["timestamp_granularities[]"] = "segment"
+    else:
+        data["response_format"] = "verbose_json"
+        data["timestamp_granularities[]"] = "segment"
     if language:
         data["language"] = language
     if prompt:
@@ -258,6 +276,7 @@ def _call_openai_transcription_api(
         )
 
     response.raise_for_status()
+
     payload = response.json()
     if not isinstance(payload, dict):
         raise ValueError(
