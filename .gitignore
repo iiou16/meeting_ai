@@ -15,9 +15,13 @@ __pycache__/
 # tool configs
 .serena/
 .uv-cache/
+.playwright-mcp/
 backend/.venv/
 frontend/.next/
 frontend/node_modules/
+
+# build artifacts
+*.egg-info/
 
 # 一時ファイル
 storage/

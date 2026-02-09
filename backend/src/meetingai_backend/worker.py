@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from redis import Redis
-from rq import Connection, Queue, Worker
+from rq import Queue, Worker
 
 from .settings import get_settings
 
@@ -27,9 +27,8 @@ def run_worker() -> None:
         settings.job_queue_name,
         settings.redis_url,
     )
-    with Connection(connection):
-        worker = Worker([queue], name="meetingai-worker")
-        worker.work(with_scheduler=True)
+    worker = Worker([queue], name="meetingai-worker", connection=connection)
+    worker.work(with_scheduler=True)
 
 
 __all__ = ["run_worker"]

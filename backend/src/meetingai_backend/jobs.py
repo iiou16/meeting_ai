@@ -1,4 +1,4 @@
-"""Job queue helpers for video processing tasks."""
+"""Job queue helpers for media processing tasks."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def enqueue_video_ingest_job(
     job_id: str,
     source_path: str,
 ) -> Any:
-    """Schedule the initial video processing task."""
+    """Schedule the initial media file processing task (video or audio)."""
     return queue.enqueue(
         "meetingai_backend.tasks.ingest.process_uploaded_video",
         kwargs={"job_id": job_id, "source_path": source_path},
