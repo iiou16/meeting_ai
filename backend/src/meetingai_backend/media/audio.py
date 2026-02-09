@@ -27,9 +27,9 @@ def extract_audio_to_wav(
     output_dir: Path | None = None,
     config: AudioExtractionConfig | None = None,
 ) -> Path:
-    """Extract a mono WAV file from the provided video path."""
+    """Extract a mono WAV file from the provided video or audio file path."""
     if not source.exists():
-        raise FileNotFoundError(f"video file does not exist: {source}")
+        raise FileNotFoundError(f"media file does not exist: {source}")
 
     destination_dir = output_dir or source.parent
     destination_dir.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-# Video upload endpoints.
+# Media file upload endpoints (video and audio).
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ async def upload_video(
     settings: Settings = Depends(get_settings),
     job_queue: JobQueueProtocol = Depends(_get_job_queue),
 ) -> dict[str, str]:
-    """Accept a video upload request and enqueue it for processing."""
+    """Accept a video or audio file upload and enqueue it for processing."""
     if not file.filename:
         await file.close()
         raise HTTPException(
@@ -50,12 +50,13 @@ async def upload_video(
 
     if file.content_type and (
         not file.content_type.startswith("video/")
+        and not file.content_type.startswith("audio/")
         and file.content_type not in _ALLOWED_FALLBACK_CONTENT_TYPES
     ):
         await file.close()
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Unsupported media type. Please upload a video file.",
+            detail="Unsupported media type. Please upload a video or audio file.",
         )
 
     job_id = uuid4()
@@ -88,7 +89,7 @@ router.add_api_route(
     methods=["POST"],
     status_code=status.HTTP_202_ACCEPTED,
     response_model=dict[str, str],
-    summary="Upload video for transcription processing",
+    summary="Upload video or audio file for transcription processing",
 )
 
 __all__ = ["router"]

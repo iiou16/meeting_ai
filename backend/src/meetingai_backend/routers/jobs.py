@@ -79,7 +79,11 @@ def _calculate_progress(job_directory: Path) -> float:
         return 0.7
     if list(job_directory.glob("audio_chunks/*.wav")):
         return 0.4
-    if list(job_directory.glob("*.mov")) or list(job_directory.glob("*.mp4")):
+    _source_exts = (
+        "*.mov", "*.mp4", "*.webm",
+        "*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg",
+    )
+    if any(list(job_directory.glob(ext)) for ext in _source_exts):
         return 0.2
     return 0.0
 

@@ -237,7 +237,7 @@ export default function Dashboard({
             {copy.uploadSelectLabel}
             <input
               type="file"
-              accept="video/mp4,video/quicktime,video/webm"
+              accept="video/mp4,video/quicktime,video/webm,audio/mpeg,audio/wav,audio/x-wav,audio/x-m4a,audio/aac,audio/flac,audio/ogg"
               onChange={handleFileChange}
               className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 file:mr-4 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white hover:border-slate-500"
               aria-label={copy.uploadSelectPlaceholder}
