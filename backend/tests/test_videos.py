@@ -97,7 +97,7 @@ async def test_upload_video_rejects_non_video_content(monkeypatch, tmp_path) -> 
     assert response.status_code == 415
     assert (
         response.json()["detail"]
-        == "Unsupported media type. Please upload a video file."
+        == "Unsupported media type. Please upload a video or audio file."
     )
 
 
@@ -126,3 +126,77 @@ async def test_upload_video_enqueues_job(
     payload = response.json()
     assert job_kwargs["job_id"] == payload["job_id"]
     assert job_kwargs["source_path"].endswith("meeting.mp4")
+
+
+@pytest.mark.asyncio
+async def test_upload_audio_mp3_accepted(monkeypatch, tmp_path) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("recording.mp3", b"mp3-bytes", "audio/mpeg")},
+        )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert "job_id" in payload
+
+
+@pytest.mark.asyncio
+async def test_upload_audio_wav_accepted(monkeypatch, tmp_path) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("recording.wav", b"wav-bytes", "audio/wav")},
+        )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert "job_id" in payload
+
+
+@pytest.mark.asyncio
+async def test_upload_audio_m4a_accepted(monkeypatch, tmp_path) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("recording.m4a", b"m4a-bytes", "audio/x-m4a")},
+        )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert "job_id" in payload
+
+
+@pytest.mark.asyncio
+async def test_upload_audio_enqueues_job(
+    monkeypatch, tmp_path, stub_job_queue: _StubQueue
+) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("recording.mp3", b"mp3-bytes", "audio/mpeg")},
+        )
+
+    assert response.status_code == 202
+    assert stub_job_queue.calls, "expected enqueue to be called"
+
+    call = stub_job_queue.calls[0]
+    assert call["func"] == "meetingai_backend.tasks.ingest.process_uploaded_video"
+    kwargs = call["kwargs"]
+    assert isinstance(kwargs, dict)
+    job_kwargs = kwargs["kwargs"]
+    payload = response.json()
+    assert job_kwargs["job_id"] == payload["job_id"]
+    assert job_kwargs["source_path"].endswith("recording.mp3")

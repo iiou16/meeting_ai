@@ -127,3 +127,24 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
     assert missing.status_code == 404
 
     set_settings(None)
+
+
+def test_progress_audio_source_file(tmp_path: Path) -> None:
+    """A job directory with an audio source file (e.g. .mp3) should report progress=0.2."""
+    job_dir = tmp_path / "job-audio"
+    job_dir.mkdir()
+    (job_dir / "recording.mp3").write_bytes(b"\x00\x00")
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+
+    client = TestClient(create_app())
+
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    jobs = response.json()
+    audio_job = next(job for job in jobs if job["job_id"] == "job-audio")
+    assert audio_job["status"] == "pending"
+    assert audio_job["progress"] == 0.2
+
+    set_settings(None)
