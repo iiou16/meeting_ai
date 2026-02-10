@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from meetingai_backend.app import create_app
+from meetingai_backend.job_state import mark_job_failed
 from meetingai_backend.settings import Settings, set_settings
 from meetingai_backend.summarization import (
     ActionItem,
@@ -212,5 +213,47 @@ def test_progress_audio_source_file(tmp_path: Path) -> None:
     audio_job = next(job for job in jobs if job["job_id"] == "job-audio")
     assert audio_job["status"] == "pending"
     assert audio_job["progress"] == 0.25
+
+    set_settings(None)
+
+
+def test_job_with_unknown_failure_stage(tmp_path: Path) -> None:
+    """job_failed.jsonに未知のstage値があってもジョブ一覧APIが500にならない。
+
+    過去のバグで不正なstage値（例: "rq_worker"）が記録されたデータが
+    ディスクに残っている場合、ジョブ一覧の取得でKeyErrorが発生して
+    全ジョブが表示不能になっていた。
+    """
+    job_dir = tmp_path / "job-bad-stage"
+    job_dir.mkdir()
+    (job_dir / "meeting.mov").write_bytes(b"\x00\x00")
+
+    # 不正なstage値を持つ失敗レコードを作成
+    mark_job_failed(
+        job_dir,
+        stage="rq_worker",  # _STAGE_INDEXに存在しない値
+        error="test error with unknown stage",
+    )
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+
+    client = TestClient(create_app())
+
+    # ジョブ一覧が500にならずにレスポンスを返すこと
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    jobs = response.json()
+    bad_job = next(j for j in jobs if j["job_id"] == "job-bad-stage")
+    assert bad_job["status"] == "failed"
+    assert bad_job["failure"]["message"] == "test error with unknown stage"
+    # 未知のstageでもstage_keyは記録されたstage値がそのまま返ること
+    assert bad_job["failure"]["stage"] == "rq_worker"
+
+    # 個別ジョブ詳細も同様に取得できること
+    detail_response = client.get("/api/jobs/job-bad-stage")
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["status"] == "failed"
 
     set_settings(None)
