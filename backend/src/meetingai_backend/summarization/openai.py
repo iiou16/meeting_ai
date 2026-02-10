@@ -152,14 +152,26 @@ def generate_meeting_summary(
     transcript_start_ms = min(seg.start_ms for seg in segments)
     transcript_end_ms = max(seg.end_ms for seg in segments)
 
+    if "summary_sections" in payload:
+        summary_sections_raw = payload["summary_sections"]
+    else:
+        logger.warning("LLM response missing 'summary_sections' key for job %s", job_id)
+        summary_sections_raw = []
+
+    if "action_items" in payload:
+        action_items_raw = payload["action_items"]
+    else:
+        logger.warning("LLM response missing 'action_items' key for job %s", job_id)
+        action_items_raw = []
+
     summary_items = _parse_summary_sections(
-        payload.get("summary_sections"),
+        summary_sections_raw,
         job_id=job_id,
         transcript_start_ms=transcript_start_ms,
         transcript_end_ms=transcript_end_ms,
     )
     action_items = _parse_action_items(
-        payload.get("action_items"),
+        action_items_raw,
         job_id=job_id,
         starting_order=len(summary_items),
         transcript_start_ms=transcript_start_ms,

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from meetingai_backend.job_state import JobFailureRecord, load_job_failure
-from meetingai_backend.worker import _on_job_failure
+from meetingai_backend.job_state import (
+    JobFailureRecord,
+    load_job_failure,
+    mark_job_failed,
+)
+from meetingai_backend.worker import _infer_stage_from_job, _on_job_failure
 
 
 def _make_mock_job(job_id: str, rq_job_id: str = "rq-123") -> MagicMock:
@@ -120,3 +122,80 @@ class TestOnJobFailure:
             _on_job_failure(mock_job, RuntimeError, RuntimeError("err"), None)
 
         assert not (tmp_path / "nonexistent-job" / "job_failed.json").exists()
+
+    def test_existing_failure_record_is_not_overwritten(self, tmp_path: Path) -> None:
+        """タスク側で既に失敗記録が書かれている場合、_on_job_failure は上書きしない。"""
+        job_dir = tmp_path / "test-job-id"
+        job_dir.mkdir()
+
+        # タスク側で先に失敗記録を書く
+        mark_job_failed(job_dir, stage="transcription", error="original error")
+
+        mock_job = _make_mock_job("test-job-id")
+        mock_job.func_name = (
+            "meetingai_backend.tasks.transcribe.transcribe_audio_for_job"
+        )
+        exc = RuntimeError("worker-level error")
+
+        with patch("meetingai_backend.worker.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(upload_root=tmp_path)
+            try:
+                raise exc
+            except RuntimeError:
+                import sys
+
+                tb = sys.exc_info()[2]
+                _on_job_failure(mock_job, RuntimeError, exc, tb)
+
+        # 元の失敗記録が保持されていること
+        record = load_job_failure(job_dir)
+        assert record is not None
+        assert record.stage == "transcription"
+        assert "original error" in record.message
+
+
+class TestInferStageFromJob:
+    """_infer_stage_from_job のステージ推定テスト。"""
+
+    def test_ingest_function_returns_upload_stage(self) -> None:
+        job = MagicMock()
+        job.func_name = "meetingai_backend.tasks.ingest.process_uploaded_video"
+        assert _infer_stage_from_job(job) == "upload"
+
+    def test_transcribe_function_returns_transcription_stage(self) -> None:
+        job = MagicMock()
+        job.func_name = "meetingai_backend.tasks.transcribe.transcribe_audio_for_job"
+        assert _infer_stage_from_job(job) == "transcription"
+
+    def test_summarize_function_returns_summary_stage(self) -> None:
+        job = MagicMock()
+        job.func_name = "meetingai_backend.tasks.summarize.summarize_job"
+        assert _infer_stage_from_job(job) == "summary"
+
+    def test_summarize_transcript_function_returns_summary_stage(self) -> None:
+        job = MagicMock()
+        job.func_name = "meetingai_backend.tasks.summarize.summarize_transcript_for_job"
+        assert _infer_stage_from_job(job) == "summary"
+
+    def test_unknown_function_defaults_to_upload_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """未知のジョブ関数名の場合、upload をデフォルトとし警告ログを出力する。"""
+        job = MagicMock()
+        job.func_name = "some.module.unknown_function"
+        with caplog.at_level("WARNING"):
+            result = _infer_stage_from_job(job)
+        assert result == "upload"
+        assert any("Unknown job function" in r.message for r in caplog.records)
+        assert any("unknown_function" in r.message for r in caplog.records)
+
+    def test_empty_func_name_defaults_to_upload_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """func_name が空文字列の場合も upload をデフォルトとし警告ログを出力する。"""
+        job = MagicMock()
+        job.func_name = ""
+        with caplog.at_level("WARNING"):
+            result = _infer_stage_from_job(job)
+        assert result == "upload"
+        assert any("Unknown job function" in r.message for r in caplog.records)

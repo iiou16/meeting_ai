@@ -20,11 +20,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # --- パッケージインストール (Redis チェックに仮想環境の Python を使うため先に実行) ---
-# uv sync はプロジェクト自体を非editable(キャッシュwheel)でインストールするため、
-# ソース変更が反映されない問題がある。--no-install-project で依存のみインストールし、
-# プロジェクト本体は editable install で入れる。
-UV_CACHE_DIR=../.uv-cache uv sync --no-install-project
-UV_CACHE_DIR=../.uv-cache uv pip install -e .
+UV_CACHE_DIR=../.uv-cache uv sync
 
 # --- Redis 起動 ---
 REDIS_CONTAINER_NAME="meetingai-redis"

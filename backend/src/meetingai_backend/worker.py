@@ -33,7 +33,15 @@ _JOB_FUNC_TO_STAGE: dict[str, str] = {
 def _infer_stage_from_job(job: Job) -> str:
     """ジョブ関数名からステージを推定する。"""
     func_name = job.func_name.rsplit(".", 1)[-1] if job.func_name else ""
-    return _JOB_FUNC_TO_STAGE.get(func_name, JOB_STAGE_UPLOAD)
+    if func_name in _JOB_FUNC_TO_STAGE:
+        return _JOB_FUNC_TO_STAGE[func_name]
+    logger.warning(
+        "Unknown job function '%s' (full: %s); defaulting to stage '%s'",
+        func_name,
+        job.func_name,
+        JOB_STAGE_UPLOAD,
+    )
+    return JOB_STAGE_UPLOAD
 
 
 def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:

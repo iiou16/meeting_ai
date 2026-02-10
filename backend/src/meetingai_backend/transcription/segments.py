@@ -207,6 +207,10 @@ def _iter_candidate_segments(
             )
             continue
         if end_seconds is None:
+            logger.warning(
+                "Skipping segment in asset %s: missing 'end' timestamp",
+                chunk.asset_id,
+            )
             continue
 
         start_ms = chunk.start_ms + _seconds_to_milliseconds(start_seconds)
