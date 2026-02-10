@@ -55,7 +55,7 @@ class TestOnJobFailure:
         assert record is not None
         assert isinstance(record, JobFailureRecord)
         assert "something went wrong" in record.message
-        assert record.stage == "rq_worker"
+        assert record.stage == "upload"  # ジョブ関数名不明の場合デフォルトはupload
 
     def test_error_json_not_written(self, tmp_path: Path) -> None:
         """_on_job_failure should NOT write error.json (old behavior)."""
