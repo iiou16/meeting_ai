@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../backend"
+cd "$(dirname "$0")/.."
+
+# --- .env 読み込み ---
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+cd backend
 
 # --- Docker 起動確認 ---
 if ! docker info >/dev/null 2>&1; then
@@ -11,7 +20,10 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # --- パッケージインストール (Redis チェックに仮想環境の Python を使うため先に実行) ---
-UV_CACHE_DIR=../.uv-cache uv sync
+# uv sync はプロジェクト自体を非editable(キャッシュwheel)でインストールするため、
+# ソース変更が反映されない問題がある。--no-install-project で依存のみインストールし、
+# プロジェクト本体は editable install で入れる。
+UV_CACHE_DIR=../.uv-cache uv sync --no-install-project
 UV_CACHE_DIR=../.uv-cache uv pip install -e .
 
 # --- Redis 起動 ---
