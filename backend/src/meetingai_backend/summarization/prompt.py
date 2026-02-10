@@ -84,11 +84,16 @@ def build_summary_prompt(
     if language_hint:
         language_instruction = (
             f" The source language is predominantly {language_hint}."
-            f" Keep every textual field (summaries, titles, highlights, action items, owners, due dates)"
-            f" in {language_hint} without translating."
+            f" You MUST write ALL textual fields (summaries, titles, highlights, action items,"
+            f" descriptions, owners, due dates) in {language_hint}."
+            f" Do NOT translate any content into English."
+            f" Every single string value in the JSON output must be in {language_hint}."
         )
     else:
-        language_instruction = " Maintain the language used in the transcript snippets for every textual field."
+        language_instruction = (
+            " You MUST write all textual fields in the same language as the transcript snippets."
+            " Do NOT translate content into English or any other language."
+        )
 
     return (
         "You are an expert meeting summarization assistant. "
