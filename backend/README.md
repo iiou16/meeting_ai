@@ -1,6 +1,6 @@
 # MeetingAI Backend
 
-FastAPI ベースの MeetingAI バックエンドです。動画アップロードから音声抽出、OpenAI GPT-4o Transcribe を用いた文字起こし、`TranscriptSegment` への保存までのバックエンド処理が実装されています。
+FastAPI ベースの MeetingAI バックエンドです。動画アップロードから音声抽出、OpenAI GPT-4o Transcribe を用いた文字起こし、`TranscriptSegment` への保存までのバックエンド処理が実装されています。ジョブ処理には Redis + RQ が必須です。
 
 ## 実装済み機能（フェーズ1）
 
@@ -16,6 +16,22 @@ FastAPI ベースの MeetingAI バックエンドです。動画アップロー�
 - 実データ（`backend/tests/data/2025-05-23 13-03-45.mov`）を使った統合テスト（FFmpeg が無い環境では自動的に skip）
 
 ## アプリケーションの実行
+
+### 事前準備
+
+- Redis を起動しておきます（例: `redis-server`、Docker の場合 `docker run -p 6379:6379 redis:7`）。
+- `OPENAI_API_KEY` と `ffmpeg` のパスを設定します（必要に応じて `.env` を利用）。
+
+### 開発用ショートカット
+
+API サーバーとワーカー、必要であれば Redis（ローカルに `redis-server` がある場合）をまとめて起動するスクリプトを用意しています。
+
+```bash
+cd backend
+./dev.sh
+```
+
+### 個別に起動する場合
 
 - API サーバー:
   `UV_CACHE_DIR=../.uv-cache uv run uvicorn meetingai_backend.app:create_app --factory --reload`

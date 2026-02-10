@@ -365,12 +365,49 @@ export default function Dashboard({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1">
-                          <span className="inline-flex w-fit rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
+                          <span
+                            className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                              job.status === "failed"
+                                ? "bg-red-500/20 text-red-200"
+                                : "bg-slate-800 text-slate-200"
+                            }`}
+                          >
                             {statusInfo.label}
                           </span>
-                          <span className="text-xs text-slate-400">
-                            {statusInfo.description}
-                          </span>
+                          {job.failure ? (
+                            <>
+                              <span
+                                className="text-xs text-red-300"
+                                data-testid="failure-stage"
+                              >
+                                {copy.failedAtStage(
+                                  copy.stageLabels[job.failure.stage] ??
+                                    job.failure.stage,
+                                )}
+                              </span>
+                              <span
+                                className="line-clamp-2 text-xs text-red-400/80"
+                                data-testid="failure-message"
+                              >
+                                {job.failure.message}
+                              </span>
+                              <span
+                                className="text-xs text-slate-500"
+                                data-testid="failure-time"
+                              >
+                                {copy.failureOccurredAt(
+                                  formatDateTime(
+                                    job.failure.occurred_at,
+                                    language,
+                                  ),
+                                )}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              {statusInfo.description}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-200">

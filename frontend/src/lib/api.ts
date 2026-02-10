@@ -13,20 +13,27 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
   return response.json() as Promise<T>;
 }
 
+export interface JobFailure {
+  stage: string;
+  message: string;
+  occurred_at: string;
+}
+
 export interface JobSummary {
   job_id: string;
   status: JobStatus;
   created_at: string;
   updated_at: string;
   progress: number;
-  duration_ms?: number | null;
-  languages: string[];
-  summary_count: number;
-  action_item_count: number;
   stage_index: number;
   stage_count: number;
   stage_key: string;
   can_delete: boolean;
+  duration_ms?: number | null;
+  languages: string[];
+  summary_count: number;
+  action_item_count: number;
+  failure?: JobFailure | null;
 }
 
 export interface JobDetail extends JobSummary {
@@ -96,7 +103,7 @@ export async function fetchMeeting(jobId: string): Promise<MeetingDetail> {
 
 export async function deleteJob(jobId: string): Promise<void> {
   const response = await fetch(
-    `${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`,
+    `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}`,
     { method: "DELETE" },
   );
   if (!response.ok) {

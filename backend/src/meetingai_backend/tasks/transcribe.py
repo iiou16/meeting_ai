@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import Callable, Iterable
 
+from ..job_state import JOB_STAGE_TRANSCRIPTION, clear_job_failure, mark_job_failed
+from ..jobs import enqueue_summary_job, get_job_queue
 from ..media import MediaAsset, load_media_assets
 from ..settings import Settings, get_settings
 from ..transcription import (
@@ -15,6 +18,8 @@ from ..transcription import (
     transcribe_audio_chunks,
 )
 from ..transcription.openai import ChunkRequestFn
+
+logger = logging.getLogger(__name__)
 
 
 def _build_transcription_config(settings: Settings) -> OpenAITranscriptionConfig:
@@ -55,30 +60,57 @@ def transcribe_audio_for_job(
     """Transcribe the prepared audio chunks for the given job and store transcript segments."""
     job_path = Path(job_directory)
     if not job_path.exists():
-        raise FileNotFoundError(f"job directory does not exist: {job_directory}")
+        error = FileNotFoundError(f"job directory does not exist: {job_directory}")
+        mark_job_failed(job_path, stage=JOB_STAGE_TRANSCRIPTION, error=error)
+        raise error
 
-    assets = load_media_assets(job_path)
-    chunk_assets = _filter_audio_chunk_assets(assets)
-    if not chunk_assets:
-        raise RuntimeError("no audio chunk assets found; cannot run transcription.")
+    clear_job_failure(job_path)
 
     settings = get_settings()
-    config = _build_transcription_config(settings)
     sleep_fn = sleep or time.sleep
 
-    chunk_results = transcribe_audio_chunks(
-        chunk_assets,
-        config=config,
-        language=language,
-        prompt=prompt,
-        request_fn=request_fn,
-        sleep=sleep_fn,
-    )
+    try:
+        config = _build_transcription_config(settings)
+        assets = load_media_assets(job_path)
+        chunk_assets = _filter_audio_chunk_assets(assets)
+        if not chunk_assets:
+            raise RuntimeError("no audio chunk assets found; cannot run transcription.")
 
-    segments = merge_chunk_transcriptions(job_id=job_id, chunk_results=chunk_results)
-    segments_path = dump_transcript_segments(job_path, segments)
+        chunk_results = transcribe_audio_chunks(
+            chunk_assets,
+            config=config,
+            language=language,
+            prompt=prompt,
+            request_fn=request_fn,
+            sleep=sleep_fn,
+        )
 
-    languages = sorted({segment.language for segment in segments if segment.language})
+        segments = merge_chunk_transcriptions(
+            job_id=job_id, chunk_results=chunk_results
+        )
+        segments_path = dump_transcript_segments(job_path, segments)
+
+        languages = sorted(
+            {segment.language for segment in segments if segment.language}
+        )
+    except Exception as exc:
+        mark_job_failed(job_path, stage=JOB_STAGE_TRANSCRIPTION, error=exc)
+        raise
+
+    try:
+        queue = get_job_queue(settings)
+        enqueue_summary_job(
+            queue=queue,
+            job_id=job_id,
+            job_directory=str(job_path),
+        )
+    except Exception as exc:
+        logger.exception(
+            "Failed to enqueue summary job",
+            extra={"job_id": job_id, "job_directory": str(job_path)},
+        )
+        mark_job_failed(job_path, stage=JOB_STAGE_TRANSCRIPTION, error=exc)
+        raise
 
     return {
         "job_id": job_id,

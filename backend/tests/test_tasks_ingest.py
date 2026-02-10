@@ -6,6 +6,7 @@ from typing import Iterator
 
 import pytest
 
+from meetingai_backend.job_state import load_job_failure
 from meetingai_backend.media.assets import MediaAsset
 from meetingai_backend.media.chunking import AudioChunkSpec
 from meetingai_backend.settings import Settings, set_settings
@@ -76,6 +77,27 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
         fake_split,
     )
 
+    queued: dict[str, str] = {}
+
+    def fake_get_job_queue(settings_param):
+        assert settings_param is settings
+        return object()
+
+    def fake_enqueue_transcription_job(
+        *, queue, job_id, job_directory, language=None, prompt=None
+    ):
+        queued["job_id"] = job_id
+        queued["job_directory"] = job_directory
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_job_queue",
+        fake_get_job_queue,
+    )
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.enqueue_transcription_job",
+        fake_enqueue_transcription_job,
+    )
+
     result = process_uploaded_video(job_id="abc123", source_path=str(video))
 
     assert result["job_id"] == "abc123"
@@ -96,6 +118,8 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
     chunk_asset = next(item for item in manifest if item["kind"] == "audio_chunk")
     assert chunk_asset["parent_asset_id"] == master_asset["asset_id"]
     assert master_asset["duration_ms"] >= chunk_asset["duration_ms"]
+    assert queued["job_id"] == "abc123"
+    assert queued["job_directory"] == str(tmp_path)
 
 
 def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
@@ -170,6 +194,89 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
     assert manifest_path.exists()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert len(manifest) == 2  # master + chunk
+
+
+def test_process_uploaded_video_marks_failed_on_enqueue_error(
+    monkeypatch, tmp_path
+) -> None:
+    """When enqueue_transcription_job raises, job is marked failed with stage=chunking."""
+    video = tmp_path / "recording.mp4"
+    video.write_bytes(b"binary-video")
+
+    def fake_extract_audio(path: Path, *, config):
+        destination = path.with_suffix(".wav")
+        destination.write_bytes(b"audio")
+        return destination
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.extract_audio_to_wav",
+        fake_extract_audio,
+    )
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg-test",
+    )
+    set_settings(settings)
+
+    def fake_split(
+        audio_path: Path,
+        *,
+        job_id: str,
+        chunk_duration_seconds: int = 900,
+        parent_asset_id,
+        output_dir: Path,
+    ):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        chunk_path = output_dir / "chunk_0000.wav"
+        chunk_path.write_bytes(b"chunk-audio")
+        chunk_asset = MediaAsset(
+            asset_id="chunk-asset",
+            job_id=job_id,
+            kind="audio_chunk",
+            path=chunk_path.resolve(),
+            order=0,
+            duration_ms=480,
+            start_ms=0,
+            end_ms=480,
+            sample_rate=16_000,
+            channels=1,
+            bit_depth=16,
+            parent_asset_id=parent_asset_id,
+            extra={},
+        )
+        return [AudioChunkSpec(asset=chunk_asset, path=chunk_path)]
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.split_wav_into_chunks",
+        fake_split,
+    )
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_job_queue",
+        lambda _: object(),
+    )
+
+    def fake_enqueue_transcription_job(
+        *, queue, job_id, job_directory, language=None, prompt=None
+    ):
+        raise RuntimeError("redis connection refused")
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.enqueue_transcription_job",
+        fake_enqueue_transcription_job,
+    )
+
+    with pytest.raises(RuntimeError, match="redis connection refused"):
+        process_uploaded_video(job_id="abc123", source_path=str(video))
+
+    failure = load_job_failure(tmp_path)
+    assert failure is not None
+    assert failure.stage == "chunking"
+    assert "redis connection refused" in failure.message
 
 
 def test_process_uploaded_video_missing_source(tmp_path) -> None:

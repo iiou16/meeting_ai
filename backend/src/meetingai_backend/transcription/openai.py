@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,6 +11,8 @@ from pathlib import Path
 from typing import Callable, Mapping, Protocol, Sequence
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from ..media import MediaAsset
 
@@ -163,6 +167,14 @@ def transcribe_audio_chunks(
                 )
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code if exc.response is not None else None
+                error_text = None
+                if exc.response is not None:
+                    try:
+                        error_text = exc.response.text
+                    except (AttributeError, UnicodeDecodeError) as read_exc:
+                        logger.warning(
+                            "Could not read error response text: %s", read_exc
+                        )
                 if status in _RETRIABLE_STATUS and attempt < config.max_attempts:
                     delay = _select_retry_delay(
                         attempt=attempt,
@@ -174,7 +186,7 @@ def transcribe_audio_chunks(
                     continue
 
                 raise TranscriptionError(
-                    f"transcription failed with status {status}",
+                    f"transcription failed with status {status}: {error_text}",
                     asset_id=asset.asset_id,
                     status_code=status,
                 ) from exc
@@ -243,6 +255,17 @@ def _call_openai_transcription_api(
         headers["User-Agent"] = config.user_agent
 
     data: dict[str, str] = {"model": config.model}
+    normalized_model = config.model.lower()
+    if normalized_model.endswith("-diarize"):
+        data["response_format"] = "diarized_json"
+        data["chunking_strategy"] = json.dumps({"type": "server_vad"})
+    elif "gpt-4o-transcribe" in normalized_model:
+        # gpt-4o transcription models reject `verbose_json`; use `json` plus segment granularity.
+        data["response_format"] = "json"
+        data["timestamp_granularities[]"] = "segment"
+    else:
+        data["response_format"] = "verbose_json"
+        data["timestamp_granularities[]"] = "segment"
     if language:
         data["language"] = language
     if prompt:
@@ -258,6 +281,7 @@ def _call_openai_transcription_api(
         )
 
     response.raise_for_status()
+
     payload = response.json()
     if not isinstance(payload, dict):
         raise ValueError(
@@ -268,15 +292,16 @@ def _call_openai_transcription_api(
 
 
 def _extract_transcript_text(payload: dict[str, object], *, asset_id: str) -> str:
-    text = payload.get("text")
-    if isinstance(text, str):
-        return text
+    if "text" in payload:
+        text = payload["text"]
+        if isinstance(text, str):
+            return text
     if "segments" in payload and isinstance(payload["segments"], list):
         segments = payload["segments"]
         collected = []
         for entry in segments:
-            if isinstance(entry, dict):
-                segment_text = entry.get("text")
+            if isinstance(entry, dict) and "text" in entry:
+                segment_text = entry["text"]
                 if isinstance(segment_text, str):
                     collected.append(segment_text)
         if collected:
@@ -289,14 +314,16 @@ def _extract_transcript_text(payload: dict[str, object], *, asset_id: str) -> st
 
 
 def _extract_language(payload: dict[str, object]) -> str | None:
-    language = payload.get("language")
-    if isinstance(language, str):
-        return language
-    metadata = payload.get("metadata")
-    if isinstance(metadata, dict):
-        detected = metadata.get("language")
-        if isinstance(detected, str):
-            return detected
+    if "language" in payload:
+        language = payload["language"]
+        if isinstance(language, str):
+            return language
+    if "metadata" in payload:
+        metadata = payload["metadata"]
+        if isinstance(metadata, dict) and "language" in metadata:
+            detected = metadata["language"]
+            if isinstance(detected, str):
+                return detected
     return None
 
 
@@ -319,9 +346,9 @@ def _select_retry_delay(
 
 
 def _parse_retry_after_seconds(headers: Mapping[str, str]) -> float | None:
-    raw_value = headers.get("Retry-After")
-    if not raw_value:
+    if "Retry-After" not in headers:
         return None
+    raw_value = headers["Retry-After"]
 
     value = raw_value.strip()
     try:

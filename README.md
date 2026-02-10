@@ -16,7 +16,7 @@ MeetingAI は、会議動画から自動で文字起こし・要約・アクシ�
 - Python 3.11
 - [uv](https://github.com/astral-sh/uv)（Python 依存解決・仮想環境管理）
 - Node.js 18+（フロントエンド開発時に利用）
-- Redis 5+（バックエンドジョブキュー用、オプション）
+- Redis 5+（バックエンドジョブキュー用、必須）
 - FFmpeg（動画→音声抽出で必須）
 - OpenAI API キー
 
@@ -37,12 +37,14 @@ MeetingAI は、会議動画から自動で文字起こし・要約・アクシ�
 ジョブキュー管理に Redis が必要です。
 
 - **macOS**: `brew install redis && brew services start redis`
-- **Windows (WSL/Ubuntu)**:
-  ```bash
-  sudo apt-get update
-  sudo apt-get install redis-server
-  sudo service redis-server start
-  ```
+- **Windows**:
+  - [Memurai](https://www.memurai.com/) など Windows 向け Redis 互換サーバーを利用するか、WSL 上で以下手順を実行
+    ```bash
+    sudo apt-get update
+    sudo apt-get install redis-server
+    sudo service redis-server start
+    ```
+- **Ubuntu / Debian 系**: `sudo apt-get update && sudo apt-get install redis-server`
 - **Docker** (推奨):
   ```bash
   docker run -d --name redis-meetingai -p 6379:6379 redis:alpine
@@ -67,6 +69,13 @@ OPENAI_API_KEY=sk-...
 cd backend
 UV_CACHE_DIR=../.uv-cache uv sync
 source .venv/bin/activate
+```
+
+バックエンド（API + ワーカー）をまとめて起動するには `backend/dev.sh` を利用できます。
+
+```bash
+cd backend
+./dev.sh
 ```
 
 詳細な実装内容や起動・テスト方法は `backend/README.md` を参照してください。

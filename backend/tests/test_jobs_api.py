@@ -111,22 +111,19 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
     assert completed["summary_count"] == 1
     assert completed["action_item_count"] == 1
     assert completed["progress"] == 1.0
+    assert completed["stage_index"] == 4
+    assert completed["stage_count"] == 4
+    assert completed["stage_key"] == "summary"
     assert completed["languages"] == ["ja"]
+    assert completed["can_delete"] is True
 
     pending = next(job for job in jobs if job["job_id"] == "job-pending")
     assert pending["status"] == "pending"
-    assert pending["progress"] == 0.2
-
-    # --- stage info assertions ---
-    assert completed["stage_index"] == 3
-    assert completed["stage_count"] == 3
-    assert completed["stage_key"] == "summary"
-    assert completed["can_delete"] is True
-
+    assert pending["progress"] == 0.25
     assert pending["stage_index"] == 1
-    assert pending["stage_count"] == 3
-    assert pending["stage_key"] == "ingest"
-    assert pending["can_delete"] is True
+    assert pending["stage_count"] == 4
+    assert pending["stage_key"] == "upload"
+    assert pending["can_delete"] is False
 
     detail = client.get("/api/jobs/job-complete")
     assert detail.status_code == 200
@@ -141,7 +138,7 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
 
 
 def test_stage_info_transcribing(tmp_path: Path) -> None:
-    """Job with audio chunks should report stage_key='transcribe', stage_index=2."""
+    """Job with audio chunks should report stage_key='chunking', stage_index=2."""
     job_dir = tmp_path / "job-chunks"
     job_dir.mkdir()
     chunks_dir = job_dir / "audio_chunks"
@@ -157,14 +154,14 @@ def test_stage_info_transcribing(tmp_path: Path) -> None:
     jobs = response.json()
     job = next(j for j in jobs if j["job_id"] == "job-chunks")
     assert job["stage_index"] == 2
-    assert job["stage_count"] == 3
-    assert job["stage_key"] == "transcribe"
+    assert job["stage_count"] == 4
+    assert job["stage_key"] == "chunking"
 
     set_settings(None)
 
 
 def test_stage_info_summarizing(tmp_path: Path) -> None:
-    """Job with transcript should report stage_key='summarize', stage_index=3."""
+    """Job with transcript should report stage_key='transcription', stage_index=3."""
     job_dir = tmp_path / "job-transcript"
     job_dir.mkdir()
     segments = [
@@ -192,14 +189,14 @@ def test_stage_info_summarizing(tmp_path: Path) -> None:
     jobs = response.json()
     job = next(j for j in jobs if j["job_id"] == "job-transcript")
     assert job["stage_index"] == 3
-    assert job["stage_count"] == 3
-    assert job["stage_key"] == "summarize"
+    assert job["stage_count"] == 4
+    assert job["stage_key"] == "transcription"
 
     set_settings(None)
 
 
 def test_progress_audio_source_file(tmp_path: Path) -> None:
-    """A job directory with an audio source file (e.g. .mp3) should report progress=0.2."""
+    """A job directory with an audio source file (e.g. .mp3) should report progress=0.25."""
     job_dir = tmp_path / "job-audio"
     job_dir.mkdir()
     (job_dir / "recording.mp3").write_bytes(b"\x00\x00")
@@ -214,6 +211,6 @@ def test_progress_audio_source_file(tmp_path: Path) -> None:
     jobs = response.json()
     audio_job = next(job for job in jobs if job["job_id"] == "job-audio")
     assert audio_job["status"] == "pending"
-    assert audio_job["progress"] == 0.2
+    assert audio_job["progress"] == 0.25
 
     set_settings(None)

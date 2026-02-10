@@ -11,16 +11,17 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application instance."""
     app = FastAPI(title="MeetingAI Backend", version="0.1.0")
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:3001"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     settings = get_settings()
     settings.upload_root.mkdir(parents=True, exist_ok=True)
     app.state.settings = settings
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.include_router(health.router)
     app.include_router(jobs.router)

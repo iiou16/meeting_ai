@@ -24,6 +24,12 @@ type BaseCopy = {
   };
   statusLabels: Record<string, string>;
   statusDescriptions: Record<string, string>;
+  stageLabels: Record<string, string>;
+  deleteButton: string;
+  deleteInProgress: string;
+  deleteSuccess: string;
+  deleteError: string;
+  deleteConfirm: (jobId: string) => string;
   viewDetails: string;
   refreshButton: string;
   lastUpdatedPrefix: string;
@@ -40,12 +46,8 @@ type BaseCopy = {
   meetingEmptyAction: string;
   meetingEmptyTranscript: string;
   meetingExportButton: string;
-  stageLabels: Record<string, string>;
-  deleteButton: string;
-  deleteInProgress: string;
-  deleteConfirm: (jobId: string) => string;
-  deleteSuccess: string;
-  deleteError: string;
+  failedAtStage: (stage: string) => string;
+  failureOccurredAt: (time: string) => string;
 };
 
 function jaCopy(): BaseCopy {
@@ -87,6 +89,17 @@ function jaCopy(): BaseCopy {
       completed: "すべての処理が完了しました。",
       failed: "エラーが発生しました。ログを確認してください。",
     },
+    stageLabels: {
+      upload: "アップロード完了",
+      chunking: "音声チャンク生成",
+      transcription: "文字起こし生成",
+      summary: "要約生成",
+    },
+    deleteButton: "ジョブを削除",
+    deleteInProgress: "削除中...",
+    deleteSuccess: "ジョブを削除しました。",
+    deleteError: "ジョブの削除に失敗しました: ",
+    deleteConfirm: (jobId: string) => `ジョブ ${jobId} を削除しますか？`,
     viewDetails: "詳細を見る",
     refreshButton: "一覧を更新",
     lastUpdatedPrefix: "最終更新",
@@ -106,18 +119,9 @@ function jaCopy(): BaseCopy {
     meetingEmptyAction: "アクションアイテムは検出されませんでした。",
     meetingEmptyTranscript: "文字起こしが見つかりませんでした。",
     meetingExportButton: "JSONでダウンロード",
-    stageLabels: {
-      ingest: "音声抽出",
-      transcribe: "文字起こし",
-      summarize: "要約生成",
-      summary: "要約生成",
-    },
-    deleteButton: "削除",
-    deleteInProgress: "削除中…",
-    deleteConfirm: (jobId: string) =>
-      `ジョブ ${jobId} を削除してよろしいですか？`,
-    deleteSuccess: "ジョブを削除しました。",
-    deleteError: "ジョブの削除に失敗しました: ",
+    failedAtStage: (stage: string) =>
+      `${stage} で失敗しました`,
+    failureOccurredAt: (time: string) => `発生日時: ${time}`,
   };
 }
 
@@ -161,6 +165,17 @@ function enCopy(): BaseCopy {
       completed: "Processing finished successfully.",
       failed: "Processing failed. Check worker logs.",
     },
+    stageLabels: {
+      upload: "Upload complete",
+      chunking: "Audio chunking",
+      transcription: "Transcription",
+      summary: "Summary",
+    },
+    deleteButton: "Delete job",
+    deleteInProgress: "Deleting…",
+    deleteSuccess: "Job deleted successfully.",
+    deleteError: "Failed to delete job: ",
+    deleteConfirm: (jobId: string) => `Delete job ${jobId}?`,
     viewDetails: "View details",
     refreshButton: "Refresh list",
     lastUpdatedPrefix: "Last updated",
@@ -180,18 +195,9 @@ function enCopy(): BaseCopy {
     meetingEmptyAction: "No action items detected.",
     meetingEmptyTranscript: "No transcript segments found.",
     meetingExportButton: "Download as JSON",
-    stageLabels: {
-      ingest: "Audio extraction",
-      transcribe: "Transcription",
-      summarize: "Summarisation",
-      summary: "Summarisation",
-    },
-    deleteButton: "Delete",
-    deleteInProgress: "Deleting…",
-    deleteConfirm: (jobId: string) =>
-      `Are you sure you want to delete job ${jobId}?`,
-    deleteSuccess: "Job deleted successfully.",
-    deleteError: "Failed to delete job: ",
+    failedAtStage: (stage: string) =>
+      `Failed at ${stage}`,
+    failureOccurredAt: (time: string) => `Occurred at: ${time}`,
   };
 }
 
