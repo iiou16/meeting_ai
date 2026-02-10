@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Sequence
 
-from ..job_state import JOB_STAGE_UPLOAD, clear_job_failure, mark_job_failed
+from ..job_state import JOB_STAGE_CHUNKING, JOB_STAGE_UPLOAD, clear_job_failure, mark_job_failed
 from ..jobs import enqueue_transcription_job, get_job_queue
 from ..media import (
     AudioExtractionConfig,
@@ -92,30 +92,32 @@ def process_uploaded_video(*, job_id: str, source_path: str) -> dict[str, object
 
         assets = [master_asset, *chunk_assets]
         manifest_path = dump_media_assets(job_directory, assets)
-
-        try:
-            queue = get_job_queue(settings)
-            enqueue_transcription_job(
-                queue=queue,
-                job_id=job_id,
-                job_directory=str(job_directory),
-            )
-        except Exception:  # pragma: no cover - defensive logging
-            logger.exception(
-                "Failed to enqueue transcription job",
-                extra={"job_id": job_id, "job_directory": str(job_directory)},
-            )
-
-        return {
-            "job_id": job_id,
-            "source_path": str(path.resolve()),
-            "audio_path": str(audio_path.resolve()),
-            "media_assets_path": str(manifest_path.resolve()),
-            "audio_chunks": [str(spec.path.resolve()) for spec in chunk_specs],
-        }
     except Exception as exc:
         mark_job_failed(job_directory, stage=JOB_STAGE_UPLOAD, error=exc)
         raise
+
+    try:
+        queue = get_job_queue(settings)
+        enqueue_transcription_job(
+            queue=queue,
+            job_id=job_id,
+            job_directory=str(job_directory),
+        )
+    except Exception as exc:
+        logger.exception(
+            "Failed to enqueue transcription job",
+            extra={"job_id": job_id, "job_directory": str(job_directory)},
+        )
+        mark_job_failed(job_directory, stage=JOB_STAGE_CHUNKING, error=exc)
+        raise
+
+    return {
+        "job_id": job_id,
+        "source_path": str(path.resolve()),
+        "audio_path": str(audio_path.resolve()),
+        "media_assets_path": str(manifest_path.resolve()),
+        "audio_chunks": [str(spec.path.resolve()) for spec in chunk_specs],
+    }
 
 
 __all__ = ["process_uploaded_video"]

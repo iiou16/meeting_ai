@@ -66,15 +66,15 @@ def transcribe_audio_for_job(
 
     clear_job_failure(job_path)
 
+    settings = get_settings()
+    config = _build_transcription_config(settings)
+    sleep_fn = sleep or time.sleep
+
     try:
         assets = load_media_assets(job_path)
         chunk_assets = _filter_audio_chunk_assets(assets)
         if not chunk_assets:
             raise RuntimeError("no audio chunk assets found; cannot run transcription.")
-
-        settings = get_settings()
-        config = _build_transcription_config(settings)
-        sleep_fn = sleep or time.sleep
 
         chunk_results = transcribe_audio_chunks(
             chunk_assets,
@@ -93,30 +93,32 @@ def transcribe_audio_for_job(
         languages = sorted(
             {segment.language for segment in segments if segment.language}
         )
-
-        try:
-            queue = get_job_queue(settings)
-            enqueue_summary_job(
-                queue=queue,
-                job_id=job_id,
-                job_directory=str(job_path),
-            )
-        except Exception:  # pragma: no cover - defensive logging
-            logger.exception(
-                "Failed to enqueue summary job",
-                extra={"job_id": job_id, "job_directory": str(job_path)},
-            )
-
-        return {
-            "job_id": job_id,
-            "chunk_count": len(chunk_assets),
-            "segment_count": len(segments),
-            "segments_path": str(segments_path.resolve()),
-            "languages": languages,
-        }
     except Exception as exc:
         mark_job_failed(job_path, stage=JOB_STAGE_TRANSCRIPTION, error=exc)
         raise
+
+    try:
+        queue = get_job_queue(settings)
+        enqueue_summary_job(
+            queue=queue,
+            job_id=job_id,
+            job_directory=str(job_path),
+        )
+    except Exception as exc:
+        logger.exception(
+            "Failed to enqueue summary job",
+            extra={"job_id": job_id, "job_directory": str(job_path)},
+        )
+        mark_job_failed(job_path, stage=JOB_STAGE_TRANSCRIPTION, error=exc)
+        raise
+
+    return {
+        "job_id": job_id,
+        "chunk_count": len(chunk_assets),
+        "segment_count": len(segments),
+        "segments_path": str(segments_path.resolve()),
+        "languages": languages,
+    }
 
 
 __all__ = ["transcribe_audio_for_job"]

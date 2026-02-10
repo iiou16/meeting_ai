@@ -5,6 +5,7 @@ from typing import Iterator
 
 import pytest
 
+from meetingai_backend.job_state import load_job_failure
 from meetingai_backend.media.assets import MediaAsset, dump_media_assets
 from meetingai_backend.settings import Settings, set_settings
 from meetingai_backend.tasks.transcribe import transcribe_audio_for_job
@@ -129,6 +130,60 @@ def test_transcribe_audio_for_job_persists_segments(
     assert segments[1].end_ms == 2_000
     assert enqueued["job_id"] == "job-001"
     assert enqueued["job_directory"] == str(job_dir)
+
+
+def test_transcribe_marks_failed_on_enqueue_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """When enqueue_summary_job raises, job is marked failed with stage=transcription."""
+    job_dir, _master, chunk_asset = _prepare_job_directory(tmp_path)
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg",
+        openai_api_key="test-key",
+    )
+    set_settings(settings)
+
+    def fake_request_fn(
+        *, file_path: Path, config, language, prompt
+    ) -> dict[str, object]:
+        return {
+            "text": "hello world",
+            "language": "en",
+            "segments": [
+                {"start": 0.0, "end": 1.0, "text": "hello"},
+            ],
+        }
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.transcribe.get_job_queue",
+        lambda _: object(),
+    )
+
+    def fake_enqueue_summary_job(*, queue, job_id, job_directory):
+        raise RuntimeError("redis connection refused")
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.transcribe.enqueue_summary_job",
+        fake_enqueue_summary_job,
+    )
+
+    with pytest.raises(RuntimeError, match="redis connection refused"):
+        transcribe_audio_for_job(
+            job_id="job-001",
+            job_directory=str(job_dir),
+            request_fn=fake_request_fn,  # type: ignore[arg-type]
+            sleep=lambda _: None,
+        )
+
+    failure = load_job_failure(job_dir)
+    assert failure is not None
+    assert failure.stage == "transcription"
+    assert "redis connection refused" in failure.message
 
 
 def test_transcribe_audio_for_job_requires_api_key(tmp_path: Path) -> None:
