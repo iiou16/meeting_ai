@@ -45,11 +45,16 @@ class JobFailureRecord:
             )
         occurred_at = datetime.fromisoformat(occurred_at_raw)
 
-        details = payload["details"]
-        if not isinstance(details, dict):
-            raise TypeError(
-                f"details must be a dict, got {type(details).__name__}"
-            )
+        # "details" was added after the initial release; old records on
+        # disk may not contain this key.
+        if "details" in payload:
+            details = payload["details"]
+            if not isinstance(details, dict):
+                raise TypeError(
+                    f"details must be a dict, got {type(details).__name__}"
+                )
+        else:
+            details = {}
 
         return cls(
             stage=str(payload["stage"]),
