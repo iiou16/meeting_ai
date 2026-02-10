@@ -23,7 +23,18 @@ MeetingAI は会議動画から自動で文字起こし・要約・アクショ�
 
 ## Common Development Commands
 
-### Backend (Python)
+### 起動スクリプト（推奨）
+```bash
+# Backend 起動 (Redis + RQ Worker + API サーバーを一括起動)
+./scripts/start-backend.sh
+
+# Frontend 起動
+./scripts/start-frontend.sh
+```
+`start-backend.sh` は Redis コンテナ（Docker）、RQ Worker、API サーバーをまとめて起動します。
+Ctrl+C で終了すると Worker も自動停止します。
+
+### Backend (Python) - 個別コマンド
 ```bash
 # 環境構築とパッケージインストール
 cd backend
@@ -33,7 +44,7 @@ source .venv/bin/activate
 # APIサーバー起動 (開発)
 UV_CACHE_DIR=../.uv-cache uv run uvicorn meetingai_backend.app:create_app --factory --reload
 
-# ワーカー起動
+# ワーカー起動 (別ターミナル)
 UV_CACHE_DIR=../.uv-cache uv run python -m meetingai_backend.worker
 
 # テスト実行
@@ -43,7 +54,7 @@ pytest -k test_create_job      # 特定テスト関数を実行
 pytest -v                      # 詳細出力
 ```
 
-### Frontend (Next.js)
+### Frontend (Next.js) - 個別コマンド
 ```bash
 # 環境構築とパッケージインストール
 cd frontend
@@ -108,9 +119,10 @@ MEETINGAI_FFMPEG_PATH=/path/to/ffmpeg      # FFmpegパス (PATHにない場合)
 - Linux: `sudo apt-get install ffmpeg`
 
 #### Redis
-ジョブキュー管理に使用。Docker利用推奨:
+ジョブキュー管理に使用。`scripts/start-backend.sh` が Docker コンテナ (`meetingai-redis`) を自動起動します。
+手動で起動する場合:
 ```bash
-docker run -d -p 6379:6379 redis:alpine
+docker run -d --name meetingai-redis -p 6379:6379 redis:alpine
 ```
 
 ### Data Models

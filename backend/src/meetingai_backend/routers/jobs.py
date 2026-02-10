@@ -115,6 +115,8 @@ def _calculate_stage(job_directory: Path) -> tuple[int, str]:
 
 
 def _determine_status(job_directory: Path) -> JobStatus:
+    if _has_file(job_directory, "error.json"):
+        return JobStatus.FAILED
     if _has_file(job_directory, "summary_items.json"):
         return JobStatus.COMPLETED
     if _has_file(job_directory, "transcript_segments.json"):
