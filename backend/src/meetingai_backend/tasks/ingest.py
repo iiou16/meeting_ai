@@ -63,9 +63,9 @@ def process_uploaded_video(*, job_id: str, source_path: str) -> dict[str, object
         raise error
 
     settings = get_settings()
-    config = AudioExtractionConfig(ffmpeg_path=settings.ffmpeg_path)
 
     try:
+        config = AudioExtractionConfig(ffmpeg_path=settings.ffmpeg_path)
         audio_path = extract_audio_to_wav(path, config=config)
 
         chunk_specs: list[AudioChunkSpec] = split_wav_into_chunks(

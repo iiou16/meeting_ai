@@ -67,10 +67,10 @@ def transcribe_audio_for_job(
     clear_job_failure(job_path)
 
     settings = get_settings()
-    config = _build_transcription_config(settings)
     sleep_fn = sleep or time.sleep
 
     try:
+        config = _build_transcription_config(settings)
         assets = load_media_assets(job_path)
         chunk_assets = _filter_audio_chunk_assets(assets)
         if not chunk_assets:

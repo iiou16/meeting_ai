@@ -199,9 +199,14 @@ def test_transcribe_audio_for_job_requires_api_key(tmp_path: Path) -> None:
     )
     set_settings(settings)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
         transcribe_audio_for_job(
             job_id="job-001",
             job_directory=str(job_dir),
             request_fn=lambda **_: {},  # type: ignore[arg-type]
         )
+
+    failure = load_job_failure(job_dir)
+    assert failure is not None
+    assert failure.stage == "transcription"
+    assert "OPENAI_API_KEY" in failure.message
