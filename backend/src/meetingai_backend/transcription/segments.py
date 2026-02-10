@@ -10,9 +10,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
 
-logger = logging.getLogger(__name__)
-
 from .openai import ChunkTranscriptionResult
+
+logger = logging.getLogger(__name__)
 
 _SEGMENTS_FILENAME = "transcript_segments.json"
 
@@ -175,7 +175,11 @@ def _iter_candidate_segments(
 ) -> Iterator[dict[str, Any]]:
     """Yield candidate segments from the raw transcription payload."""
     response = chunk.response
-    segments = response["segments"] if isinstance(response, Mapping) and "segments" in response else None
+    segments = (
+        response["segments"]
+        if isinstance(response, Mapping) and "segments" in response
+        else None
+    )
 
     if not isinstance(segments, Sequence):
         raise RuntimeError(
@@ -214,7 +218,11 @@ def _iter_candidate_segments(
         elif "speaker" in raw and isinstance(raw["speaker"], str):
             speaker_label = raw["speaker"]
 
-        language: str | None = raw["language"] if "language" in raw and isinstance(raw["language"], str) else None
+        language: str | None = (
+            raw["language"]
+            if "language" in raw and isinstance(raw["language"], str)
+            else None
+        )
 
         candidate: dict[str, Any] = {
             "text": text,

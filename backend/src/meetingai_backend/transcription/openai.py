@@ -12,9 +12,9 @@ from typing import Callable, Mapping, Protocol, Sequence
 
 import httpx
 
-logger = logging.getLogger(__name__)
-
 from ..media import MediaAsset
+
+logger = logging.getLogger(__name__)
 
 
 class TranscriptionError(RuntimeError):

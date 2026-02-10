@@ -168,9 +168,7 @@ def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> N
 class TestCallOpenaiTranscriptionApiResponseFormat:
     """_call_openai_transcription_api がモデルに応じて正しい response_format を設定する。"""
 
-    def _capture_request_data(
-        self, tmp_path: Path, *, model: str
-    ) -> dict[str, str]:
+    def _capture_request_data(self, tmp_path: Path, *, model: str) -> dict[str, str]:
         """POST リクエストのデータフィールドをキャプチャして返す。"""
         chunk_path = tmp_path / "test.wav"
         chunk_path.write_bytes(b"RIFF" + b"\x00" * 100)
@@ -202,18 +200,14 @@ class TestCallOpenaiTranscriptionApiResponseFormat:
         return captured_data
 
     def test_diarize_model_uses_diarized_json(self, tmp_path: Path) -> None:
-        data = self._capture_request_data(
-            tmp_path, model="gpt-4o-transcribe-diarize"
-        )
+        data = self._capture_request_data(tmp_path, model="gpt-4o-transcribe-diarize")
         assert data["response_format"] == "diarized_json"
         assert "timestamp_granularities[]" not in data
 
     def test_non_diarize_gpt4o_transcribe_uses_verbose_json(
         self, tmp_path: Path
     ) -> None:
-        data = self._capture_request_data(
-            tmp_path, model="gpt-4o-transcribe"
-        )
+        data = self._capture_request_data(tmp_path, model="gpt-4o-transcribe")
         assert data["response_format"] == "verbose_json"
         assert data["timestamp_granularities[]"] == "segment"
 

@@ -9,13 +9,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
-logger = logging.getLogger(__name__)
-
 import httpx
 
 from ..transcription.segments import TranscriptSegment
 from .models import ActionItem, SummaryBundle, SummaryItem, SummaryQualityMetrics
 from .prompt import build_summary_prompt
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -279,7 +279,11 @@ def _parse_summary_sections(
         if not isinstance(entry, Mapping):
             continue
 
-        summary_text = entry["summary"] if "summary" in entry else (entry["text"] if "text" in entry else None)
+        summary_text = (
+            entry["summary"]
+            if "summary" in entry
+            else (entry["text"] if "text" in entry else None)
+        )
         if not isinstance(summary_text, str) or not summary_text.strip():
             continue
 
@@ -334,7 +338,11 @@ def _parse_summary_sections(
             normalized_highlights = []
 
         title = str(entry["title"]) if "title" in entry and entry["title"] else None
-        priority = str(entry["priority"]) if "priority" in entry and entry["priority"] else None
+        priority = (
+            str(entry["priority"])
+            if "priority" in entry and entry["priority"]
+            else None
+        )
 
         parsed.append(
             SummaryItem.create(
@@ -367,7 +375,11 @@ def _parse_action_items(
         if not isinstance(entry, Mapping):
             continue
 
-        description = entry["description"] if "description" in entry else (entry["text"] if "text" in entry else None)
+        description = (
+            entry["description"]
+            if "description" in entry
+            else (entry["text"] if "text" in entry else None)
+        )
         if not isinstance(description, str) or not description.strip():
             continue
 
@@ -403,8 +415,16 @@ def _parse_action_items(
             segment_end = clamped_end
 
         owner = str(entry["owner"]) if "owner" in entry and entry["owner"] else None
-        due_date = str(entry["due_date"]) if "due_date" in entry and entry["due_date"] else None
-        priority = str(entry["priority"]) if "priority" in entry and entry["priority"] else None
+        due_date = (
+            str(entry["due_date"])
+            if "due_date" in entry and entry["due_date"]
+            else None
+        )
+        priority = (
+            str(entry["priority"])
+            if "priority" in entry and entry["priority"]
+            else None
+        )
 
         parsed.append(
             ActionItem.create(

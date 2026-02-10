@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import pytest
 
@@ -171,7 +170,9 @@ class TestSummaryTimestampClamping:
             ),
         ]
 
-    def test_out_of_range_timestamps_are_clamped(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_out_of_range_timestamps_are_clamped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """トランスクリプト範囲外のタイムスタンプがクランプされる。"""
         segments = self._make_segments()
 

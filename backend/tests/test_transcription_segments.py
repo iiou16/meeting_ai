@@ -219,9 +219,7 @@ class TestIterCandidateSegmentsErrorCases:
                 ]
             },
         )
-        segments = merge_chunk_transcriptions(
-            job_id="job-test", chunk_results=[chunk]
-        )
+        segments = merge_chunk_transcriptions(job_id="job-test", chunk_results=[chunk])
         texts = [s.text for s in segments]
         assert "valid" in texts
         # equal と reversed は end_ms <= start_ms なので除外される

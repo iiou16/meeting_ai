@@ -61,7 +61,9 @@ class Settings:
         openai_base_url = os.getenv(
             "MEETINGAI_OPENAI_BASE_URL", "https://api.openai.com/v1"
         )
-        openai_model = os.getenv("MEETINGAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe-diarize")
+        openai_model = os.getenv(
+            "MEETINGAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe-diarize"
+        )
         openai_user_agent = (
             os.getenv("MEETINGAI_TRANSCRIBE_USER_AGENT", "MeetingAI/0.1") or None
         )
