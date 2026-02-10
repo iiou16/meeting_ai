@@ -53,9 +53,7 @@ def test_extract_audio_missing_ffmpeg(monkeypatch, tmp_path) -> None:
         extract_audio_to_wav(video)
 
 
-def test_extract_audio_output_never_collides_with_input(
-    monkeypatch, tmp_path
-) -> None:
+def test_extract_audio_output_never_collides_with_input(monkeypatch, tmp_path) -> None:
     """出力ファイル名が入力ファイルと衝突しないことを確認する。"""
     wav_input = tmp_path / "recording.wav"
     wav_input.write_bytes(b"fake-wav-data")

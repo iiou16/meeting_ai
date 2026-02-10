@@ -49,9 +49,7 @@ class TestJobsAPI:
         jobs = list_response.json()
         for job in jobs:
             job_id = job["job_id"]
-            detail_response = httpx.get(
-                f"{BASE_URL}/api/jobs/{job_id}", timeout=10
-            )
+            detail_response = httpx.get(f"{BASE_URL}/api/jobs/{job_id}", timeout=10)
             assert detail_response.status_code == 200, (
                 f"GET /api/jobs/{job_id} が {detail_response.status_code} を返しました。"
                 f" レスポンス: {detail_response.text[:500]}"

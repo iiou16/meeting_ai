@@ -179,8 +179,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         stage_key = failure_record.stage
         if stage_key not in _STAGE_INDEX:
             logger.warning(
-                "Job %s has unknown failure stage '%s'; "
-                "valid stages: %s",
+                "Job %s has unknown failure stage '%s'; valid stages: %s",
                 job_id,
                 stage_key,
                 list(_STAGE_INDEX.keys()),

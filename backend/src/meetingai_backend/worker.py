@@ -22,7 +22,6 @@ from .settings import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 
-
 _JOB_FUNC_TO_STAGE: dict[str, str] = {
     "process_uploaded_video": JOB_STAGE_UPLOAD,
     "transcribe_audio_for_job": JOB_STAGE_TRANSCRIPTION,
@@ -35,6 +34,7 @@ def _infer_stage_from_job(job: Job) -> str:
     """ジョブ関数名からステージを推定する。"""
     func_name = job.func_name.rsplit(".", 1)[-1] if job.func_name else ""
     return _JOB_FUNC_TO_STAGE.get(func_name, JOB_STAGE_UPLOAD)
+
 
 def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:
     """Write a failure marker to the job directory when an RQ job fails."""

@@ -6,7 +6,12 @@ import logging
 from pathlib import Path
 from typing import Sequence
 
-from ..job_state import JOB_STAGE_CHUNKING, JOB_STAGE_UPLOAD, clear_job_failure, mark_job_failed
+from ..job_state import (
+    JOB_STAGE_CHUNKING,
+    JOB_STAGE_UPLOAD,
+    clear_job_failure,
+    mark_job_failed,
+)
 from ..jobs import enqueue_transcription_job, get_job_queue
 from ..media import (
     AudioExtractionConfig,
