@@ -288,3 +288,44 @@ class TestSummaryTimestampClamping:
 
         assert bundle.action_items[0].segment_start_ms == 0
         assert bundle.action_items[1].segment_end_ms == 120_000
+
+    def test_action_item_excluded_when_clamped_to_invalid_range(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """クランプ後に end_ms <= start_ms となるアクションアイテムは除外される。"""
+        segments = self._make_segments()
+
+        def fake_request(*, prompt: str, config: OpenAISummarizationConfig):
+            return {
+                "summary_sections": [
+                    {
+                        "summary": "Section.",
+                        "start_ms": 0,
+                        "end_ms": 120000,
+                    }
+                ],
+                "action_items": [
+                    {
+                        "description": "Valid action item.",
+                        "start_ms": 0,
+                        "end_ms": 60000,
+                    },
+                    {
+                        "description": "Fully out of range action item.",
+                        "start_ms": 200000,
+                        "end_ms": 300000,
+                    },
+                ],
+            }
+
+        config = OpenAISummarizationConfig(api_key="test-key")
+        with caplog.at_level(logging.WARNING):
+            bundle = generate_meeting_summary(
+                job_id="job-clamp",
+                segments=segments,
+                config=config,
+                request_fn=fake_request,
+            )
+
+        assert len(bundle.action_items) == 1
+        assert bundle.action_items[0].description == "Valid action item."

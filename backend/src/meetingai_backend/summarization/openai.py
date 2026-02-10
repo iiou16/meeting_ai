@@ -426,6 +426,19 @@ def _parse_action_items(
                 )
             segment_end = clamped_end
 
+        if (
+            segment_start is not None
+            and segment_end is not None
+            and segment_end <= segment_start
+        ):
+            logger.warning(
+                "Action item %d excluded: clamped range [%d, %d] is invalid",
+                index,
+                segment_start,
+                segment_end,
+            )
+            continue
+
         owner = str(entry["owner"]) if "owner" in entry and entry["owner"] else None
         due_date = (
             str(entry["due_date"])

@@ -177,7 +177,7 @@ class TestCallOpenaiTranscriptionApiResponseFormat:
         captured_data: dict[str, str] = {}
 
         def mock_post(*args: object, **kwargs: object) -> httpx.Response:
-            data = kwargs.get("data")
+            data = kwargs["data"]
             if isinstance(data, dict):
                 captured_data.update(data)
             mock_response = MagicMock(spec=httpx.Response)
