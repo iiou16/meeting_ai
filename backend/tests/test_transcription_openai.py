@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -11,7 +12,10 @@ from meetingai_backend.transcription import (
     TranscriptionError,
     transcribe_audio_chunks,
 )
-from meetingai_backend.transcription.openai import ChunkTranscriptionResult
+from meetingai_backend.transcription.openai import (
+    ChunkTranscriptionResult,
+    _call_openai_transcription_api,
+)
 
 
 def _make_chunk_asset(tmp_path: Path, *, name: str, order: int) -> MediaAsset:
@@ -159,3 +163,55 @@ def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> N
 
     assert len(results) == 2
     assert sleep_calls == [pytest.approx(0.5, abs=1e-3)]
+
+
+class TestCallOpenaiTranscriptionApiResponseFormat:
+    """_call_openai_transcription_api がモデルに応じて正しい response_format を設定する。"""
+
+    def _capture_request_data(self, tmp_path: Path, *, model: str) -> dict[str, str]:
+        """POST リクエストのデータフィールドをキャプチャして返す。"""
+        chunk_path = tmp_path / "test.wav"
+        chunk_path.write_bytes(b"RIFF" + b"\x00" * 100)
+
+        config = OpenAITranscriptionConfig(api_key="test-key", model=model)
+        captured_data: dict[str, str] = {}
+
+        def mock_post(*args: object, **kwargs: object) -> httpx.Response:
+            data = kwargs["data"]
+            if isinstance(data, dict):
+                captured_data.update(data)
+            mock_response = MagicMock(spec=httpx.Response)
+            mock_response.status_code = 200
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json.return_value = {
+                "text": "hello",
+                "segments": [],
+            }
+            return mock_response
+
+        with patch("httpx.post", side_effect=mock_post):
+            _call_openai_transcription_api(
+                file_path=chunk_path,
+                config=config,
+                language=None,
+                prompt=None,
+            )
+
+        return captured_data
+
+    def test_diarize_model_uses_diarized_json(self, tmp_path: Path) -> None:
+        data = self._capture_request_data(tmp_path, model="gpt-4o-transcribe-diarize")
+        assert data["response_format"] == "diarized_json"
+        assert "timestamp_granularities[]" not in data
+
+    def test_non_diarize_gpt4o_transcribe_uses_verbose_json(
+        self, tmp_path: Path
+    ) -> None:
+        data = self._capture_request_data(tmp_path, model="gpt-4o-transcribe")
+        assert data["response_format"] == "verbose_json"
+        assert data["timestamp_granularities[]"] == "segment"
+
+    def test_whisper_model_uses_verbose_json(self, tmp_path: Path) -> None:
+        data = self._capture_request_data(tmp_path, model="whisper-1")
+        assert data["response_format"] == "verbose_json"
+        assert data["timestamp_granularities[]"] == "segment"

@@ -34,7 +34,11 @@ def extract_audio_to_wav(
     destination_dir = output_dir or source.parent
     destination_dir.mkdir(parents=True, exist_ok=True)
 
-    destination = destination_dir / f"{source.stem}.wav"
+    # 出力ファイル名に "_audio" を付けて入力ファイルとの衝突を防ぐ。
+    # .wavファイルを同じディレクトリに変換する場合、入力と出力が同一パスに
+    # なりFFmpegがエラーを出すため。
+    destination = destination_dir / f"{source.stem}_audio.wav"
+
     extractor_config = config or AudioExtractionConfig(ffmpeg_path="ffmpeg")
 
     command = [

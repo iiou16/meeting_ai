@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import time
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ import httpx
 from ..transcription.segments import TranscriptSegment
 from .models import ActionItem, SummaryBundle, SummaryItem, SummaryQualityMetrics
 from .prompt import build_summary_prompt
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -146,13 +149,33 @@ def generate_meeting_summary(
         if key in payload and key not in model_metadata:
             model_metadata[key] = payload[key]
 
+    transcript_start_ms = min(seg.start_ms for seg in segments)
+    transcript_end_ms = max(seg.end_ms for seg in segments)
+
+    if "summary_sections" in payload:
+        summary_sections_raw = payload["summary_sections"]
+    else:
+        logger.warning("LLM response missing 'summary_sections' key for job %s", job_id)
+        summary_sections_raw = []
+
+    if "action_items" in payload:
+        action_items_raw = payload["action_items"]
+    else:
+        logger.warning("LLM response missing 'action_items' key for job %s", job_id)
+        action_items_raw = []
+
     summary_items = _parse_summary_sections(
-        payload.get("summary_sections"), job_id=job_id
+        summary_sections_raw,
+        job_id=job_id,
+        transcript_start_ms=transcript_start_ms,
+        transcript_end_ms=transcript_end_ms,
     )
     action_items = _parse_action_items(
-        payload.get("action_items"),
+        action_items_raw,
         job_id=job_id,
         starting_order=len(summary_items),
+        transcript_start_ms=transcript_start_ms,
+        transcript_end_ms=transcript_end_ms,
     )
 
     quality = _evaluate_quality_metrics(
@@ -253,7 +276,13 @@ def _decode_summary_json(content: str) -> dict[str, Any]:
     return decoded
 
 
-def _parse_summary_sections(sections: Any, *, job_id: str) -> list[SummaryItem]:
+def _parse_summary_sections(
+    sections: Any,
+    *,
+    job_id: str,
+    transcript_start_ms: int,
+    transcript_end_ms: int,
+) -> list[SummaryItem]:
     if not isinstance(sections, Sequence):
         return []
 
@@ -262,7 +291,11 @@ def _parse_summary_sections(sections: Any, *, job_id: str) -> list[SummaryItem]:
         if not isinstance(entry, Mapping):
             continue
 
-        summary_text = entry.get("summary") or entry.get("text")
+        summary_text = (
+            entry["summary"]
+            if "summary" in entry
+            else (entry["text"] if "text" in entry else None)
+        )
         if not isinstance(summary_text, str) or not summary_text.strip():
             continue
 
@@ -275,10 +308,38 @@ def _parse_summary_sections(sections: Any, *, job_id: str) -> list[SummaryItem]:
             keys=("end_ms", "end", "segment_end_ms", "segment_end"),
         )
         if start_ms is None or end_ms is None or end_ms <= start_ms:
-            # Skip invalid spans but continue parsing others.
             continue
 
-        highlights = entry.get("highlights")
+        # Clamp timestamps to transcript range.
+        clamped_start = max(start_ms, transcript_start_ms)
+        clamped_end = min(end_ms, transcript_end_ms)
+
+        if clamped_start != start_ms or clamped_end != end_ms:
+            logger.warning(
+                "Summary section %d timestamps out of transcript range "
+                "[%d, %d]: start_ms=%d -> %d, end_ms=%d -> %d",
+                index,
+                transcript_start_ms,
+                transcript_end_ms,
+                start_ms,
+                clamped_start,
+                end_ms,
+                clamped_end,
+            )
+
+        if clamped_end <= clamped_start:
+            logger.warning(
+                "Summary section %d excluded: clamped range [%d, %d] is invalid "
+                "(original [%d, %d])",
+                index,
+                clamped_start,
+                clamped_end,
+                start_ms,
+                end_ms,
+            )
+            continue
+
+        highlights = entry["highlights"] if "highlights" in entry else None
         if isinstance(highlights, Sequence) and not isinstance(
             highlights, (str, bytes)
         ):
@@ -288,15 +349,22 @@ def _parse_summary_sections(sections: Any, *, job_id: str) -> list[SummaryItem]:
         else:
             normalized_highlights = []
 
+        title = str(entry["title"]) if "title" in entry and entry["title"] else None
+        priority = (
+            str(entry["priority"])
+            if "priority" in entry and entry["priority"]
+            else None
+        )
+
         parsed.append(
             SummaryItem.create(
                 job_id=job_id,
                 order=len(parsed),
-                segment_start_ms=start_ms,
-                segment_end_ms=end_ms,
+                segment_start_ms=clamped_start,
+                segment_end_ms=clamped_end,
                 summary_text=summary_text.strip(),
-                heading=str(entry.get("title")) if entry.get("title") else None,
-                priority=str(entry.get("priority")) if entry.get("priority") else None,
+                heading=title,
+                priority=priority,
                 highlights=normalized_highlights,
             )
         )
@@ -308,16 +376,22 @@ def _parse_action_items(
     *,
     job_id: str,
     starting_order: int,
+    transcript_start_ms: int,
+    transcript_end_ms: int,
 ) -> list[ActionItem]:
     if not isinstance(items, Sequence):
         return []
 
     parsed: list[ActionItem] = []
-    for entry in items:
+    for index, entry in enumerate(items):
         if not isinstance(entry, Mapping):
             continue
 
-        description = entry.get("description") or entry.get("text")
+        description = (
+            entry["description"]
+            if "description" in entry
+            else (entry["text"] if "text" in entry else None)
+        )
         if not isinstance(description, str) or not description.strip():
             continue
 
@@ -330,16 +404,63 @@ def _parse_action_items(
             keys=("end_ms", "end", "segment_end_ms", "segment_end"),
         )
 
+        # Clamp timestamps to transcript range.
+        if segment_start is not None:
+            clamped_start = max(segment_start, transcript_start_ms)
+            if clamped_start != segment_start:
+                logger.warning(
+                    "Action item %d start_ms out of range: %d -> %d",
+                    index,
+                    segment_start,
+                    clamped_start,
+                )
+            segment_start = clamped_start
+        if segment_end is not None:
+            clamped_end = min(segment_end, transcript_end_ms)
+            if clamped_end != segment_end:
+                logger.warning(
+                    "Action item %d end_ms out of range: %d -> %d",
+                    index,
+                    segment_end,
+                    clamped_end,
+                )
+            segment_end = clamped_end
+
+        if (
+            segment_start is not None
+            and segment_end is not None
+            and segment_end <= segment_start
+        ):
+            logger.warning(
+                "Action item %d excluded: clamped range [%d, %d] is invalid",
+                index,
+                segment_start,
+                segment_end,
+            )
+            continue
+
+        owner = str(entry["owner"]) if "owner" in entry and entry["owner"] else None
+        due_date = (
+            str(entry["due_date"])
+            if "due_date" in entry and entry["due_date"]
+            else None
+        )
+        priority = (
+            str(entry["priority"])
+            if "priority" in entry and entry["priority"]
+            else None
+        )
+
         parsed.append(
             ActionItem.create(
                 job_id=job_id,
                 order=starting_order + len(parsed),
                 description=description.strip(),
-                owner=str(entry.get("owner")) if entry.get("owner") else None,
-                due_date=str(entry.get("due_date")) if entry.get("due_date") else None,
+                owner=owner,
+                due_date=due_date,
                 segment_start_ms=segment_start,
                 segment_end_ms=segment_end,
-                priority=str(entry.get("priority")) if entry.get("priority") else None,
+                priority=priority,
             )
         )
     return parsed
@@ -467,7 +588,7 @@ def _coerce_milliseconds(value: Any) -> int | None:
 def _extract_time_value(entry: Mapping[str, Any], keys: Sequence[str]) -> int | None:
     for key in keys:
         if key in entry:
-            coerced = _coerce_milliseconds(entry.get(key))
+            coerced = _coerce_milliseconds(entry[key])
             if coerced is not None:
                 return coerced
     return None

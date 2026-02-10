@@ -132,9 +132,7 @@ def test_transcribe_audio_for_job_persists_segments(
     assert enqueued["job_directory"] == str(job_dir)
 
 
-def test_transcribe_marks_failed_on_enqueue_error(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_transcribe_marks_failed_on_enqueue_error(tmp_path: Path, monkeypatch) -> None:
     """When enqueue_summary_job raises, job is marked failed with stage=transcription."""
     job_dir, _master, chunk_asset = _prepare_job_directory(tmp_path)
 

@@ -50,9 +50,7 @@ class JobFailureRecord:
         if "details" in payload:
             details = payload["details"]
             if not isinstance(details, dict):
-                raise TypeError(
-                    f"details must be a dict, got {type(details).__name__}"
-                )
+                raise TypeError(f"details must be a dict, got {type(details).__name__}")
         else:
             details = {}
 

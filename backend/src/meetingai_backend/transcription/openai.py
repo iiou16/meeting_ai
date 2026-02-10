@@ -12,9 +12,9 @@ from typing import Callable, Mapping, Protocol, Sequence
 
 import httpx
 
-logger = logging.getLogger(__name__)
-
 from ..media import MediaAsset
+
+logger = logging.getLogger(__name__)
 
 
 class TranscriptionError(RuntimeError):
@@ -33,7 +33,7 @@ class OpenAITranscriptionConfig:
     """Configuration for interacting with the OpenAI transcription endpoint."""
 
     api_key: str
-    model: str = "gpt-4o-transcribe"
+    model: str = "gpt-4o-transcribe-diarize"
     base_url: str = "https://api.openai.com/v1"
     request_timeout_seconds: float = 300.0
     max_attempts: int = 3
@@ -260,8 +260,9 @@ def _call_openai_transcription_api(
         data["response_format"] = "diarized_json"
         data["chunking_strategy"] = json.dumps({"type": "server_vad"})
     elif "gpt-4o-transcribe" in normalized_model:
-        # gpt-4o transcription models reject `verbose_json`; use `json` plus segment granularity.
-        data["response_format"] = "json"
+        # gpt-4o-transcribe supports verbose_json with segment granularity.
+        # Note: gpt-4o-transcribe-diarize rejects verbose_json (handled in the branch above).
+        data["response_format"] = "verbose_json"
         data["timestamp_granularities[]"] = "segment"
     else:
         data["response_format"] = "verbose_json"

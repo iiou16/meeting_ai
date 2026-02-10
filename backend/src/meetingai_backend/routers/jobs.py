@@ -177,7 +177,16 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
     failure_record = load_job_failure(job_directory)
     if failure_record:
         stage_key = failure_record.stage
-        stage_index = _STAGE_INDEX[stage_key]
+        if stage_key not in _STAGE_INDEX:
+            logger.warning(
+                "Job %s has unknown failure stage '%s'; valid stages: %s",
+                job_id,
+                stage_key,
+                list(_STAGE_INDEX.keys()),
+            )
+            stage_index = 1
+        else:
+            stage_index = _STAGE_INDEX[stage_key]
         status_value = JobStatus.FAILED
         progress = stage_index / _STAGE_COUNT
         failure = _build_failure_record(failure_record)
