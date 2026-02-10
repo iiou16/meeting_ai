@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -9,6 +10,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from ..job_state import (
     JOB_STAGE_CHUNKING,
@@ -165,14 +168,16 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         if masters:
             duration_ms = int(masters[0].duration_ms)
     except FileNotFoundError:
-        duration_ms = None
+        logger.warning(
+            "Media assets not found for job %s; duration unavailable", job_id
+        )
 
     created_at = _timestamp_from_stat(job_directory, use_ctime=True)
     updated_at = _timestamp_from_stat(job_directory, use_ctime=False)
     failure_record = load_job_failure(job_directory)
     if failure_record:
         stage_key = failure_record.stage
-        stage_index = _STAGE_INDEX.get(stage_key, 1)
+        stage_index = _STAGE_INDEX[stage_key]
         status_value = JobStatus.FAILED
         progress = stage_index / _STAGE_COUNT
         failure = _build_failure_record(failure_record)

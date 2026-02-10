@@ -120,7 +120,7 @@ function jaCopy(): BaseCopy {
     meetingEmptyTranscript: "文字起こしが見つかりませんでした。",
     meetingExportButton: "JSONでダウンロード",
     failedAtStage: (stage: string) =>
-      `${stage} の後のキュー投入に失敗しました`,
+      `${stage} で失敗しました`,
     failureOccurredAt: (time: string) => `発生日時: ${time}`,
   };
 }
@@ -196,7 +196,7 @@ function enCopy(): BaseCopy {
     meetingEmptyTranscript: "No transcript segments found.",
     meetingExportButton: "Download as JSON",
     failedAtStage: (stage: string) =>
-      `Failed to enqueue after ${stage}`,
+      `Failed at ${stage}`,
     failureOccurredAt: (time: string) => `Occurred at: ${time}`,
   };
 }

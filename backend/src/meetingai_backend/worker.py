@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:
     """Write an error marker file to the job directory when an RQ job fails."""
-    kwargs = job.kwargs or {}
-    job_id = kwargs.get("job_id")
-    if job_id is None:
-        logger.error("Failed job has no job_id in kwargs; cannot write error marker")
+    kwargs = job.kwargs
+    if kwargs is None:
+        logger.error("Failed job has no kwargs; cannot write error marker")
         return
+    job_id = kwargs["job_id"]
 
     settings = get_settings()
     job_directory = settings.upload_root / job_id

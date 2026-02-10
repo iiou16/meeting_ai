@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 JOB_STAGE_UPLOAD = "upload"
 JOB_STAGE_CHUNKING = "chunking"
@@ -26,33 +29,31 @@ class JobFailureRecord:
     details: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+        return {
             "stage": self.stage,
             "message": self.message,
             "occurred_at": self.occurred_at.isoformat(),
+            "details": self.details,
         }
-        if self.details:
-            payload["details"] = self.details
-        return payload
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "JobFailureRecord":
-        occurred_at_raw = payload.get("occurred_at")
-        if isinstance(occurred_at_raw, str):
-            try:
-                occurred_at = datetime.fromisoformat(occurred_at_raw)
-            except ValueError:
-                occurred_at = datetime.now(timezone.utc)
-        else:
-            occurred_at = datetime.now(timezone.utc)
+        occurred_at_raw = payload["occurred_at"]
+        if not isinstance(occurred_at_raw, str):
+            raise TypeError(
+                f"occurred_at must be a string, got {type(occurred_at_raw).__name__}"
+            )
+        occurred_at = datetime.fromisoformat(occurred_at_raw)
 
-        details = payload.get("details")
+        details = payload["details"]
         if not isinstance(details, dict):
-            details = {}
+            raise TypeError(
+                f"details must be a dict, got {type(details).__name__}"
+            )
 
         return cls(
-            stage=str(payload.get("stage") or JOB_STAGE_UPLOAD),
-            message=str(payload.get("message") or "Unknown error"),
+            stage=str(payload["stage"]),
+            message=str(payload["message"]),
             occurred_at=occurred_at,
             details=details,
         )
@@ -100,8 +101,9 @@ def load_job_failure(job_directory: Path) -> JobFailureRecord | None:
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):  # pragma: no cover - corrupted file
-        return None
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.error("Failed to read job failure record at %s: %s", path, exc)
+        raise
 
     if not isinstance(payload, dict):
         return None
