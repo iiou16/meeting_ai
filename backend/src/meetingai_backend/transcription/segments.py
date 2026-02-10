@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
+
+logger = logging.getLogger(__name__)
 
 from .openai import ChunkTranscriptionResult
 
@@ -172,52 +175,65 @@ def _iter_candidate_segments(
 ) -> Iterator[dict[str, Any]]:
     """Yield candidate segments from the raw transcription payload."""
     response = chunk.response
-    segments = response.get("segments") if isinstance(response, Mapping) else None
+    segments = response["segments"] if isinstance(response, Mapping) and "segments" in response else None
 
-    if isinstance(segments, Sequence):
-        for raw in segments:
-            if not isinstance(raw, Mapping):
-                continue
-            text = raw.get("text")
-            if not isinstance(text, str):
-                continue
+    if not isinstance(segments, Sequence):
+        raise RuntimeError(
+            f"Transcription response for asset {chunk.asset_id} "
+            f"(chunk {chunk.start_ms}-{chunk.end_ms} ms) did not contain "
+            f"segments. Check that the model and response_format support "
+            f"segment-level timestamps."
+        )
 
-            start_seconds = _parse_seconds(raw.get("start"))
-            end_seconds = _parse_seconds(raw.get("end"))
-            if end_seconds is None:
-                continue
+    yielded = False
+    for raw in segments:
+        if not isinstance(raw, Mapping):
+            continue
 
-            start_ms = chunk.start_ms + _seconds_to_milliseconds(start_seconds or 0.0)
-            end_ms = chunk.start_ms + _seconds_to_milliseconds(end_seconds)
+        if "text" not in raw or not isinstance(raw["text"], str):
+            continue
+        text: str = raw["text"]
 
-            candidate: dict[str, Any] = {
-                "text": text,
-                "start_ms": start_ms,
-                "end_ms": end_ms,
-                "language": raw.get("language"),
-                "speaker_label": (
-                    raw.get("speaker_label")
-                    if isinstance(raw.get("speaker_label"), str)
-                    else (
-                        raw.get("speaker")
-                        if isinstance(raw.get("speaker"), str)
-                        else None
-                    )
-                ),
-                "extra": _extract_segment_extra(raw),
-            }
-            yield candidate
-        return
+        start_seconds = _parse_seconds(raw["start"] if "start" in raw else None)
+        end_seconds = _parse_seconds(raw["end"] if "end" in raw else None)
+        if start_seconds is None:
+            logger.warning(
+                "Skipping segment in asset %s: missing 'start' timestamp",
+                chunk.asset_id,
+            )
+            continue
+        if end_seconds is None:
+            continue
 
-    # Fallback: treat the entire chunk as a single segment.
-    yield {
-        "text": chunk.text,
-        "start_ms": chunk.start_ms,
-        "end_ms": chunk.end_ms,
-        "language": chunk.language,
-        "speaker_label": None,
-        "extra": {},
-    }
+        start_ms = chunk.start_ms + _seconds_to_milliseconds(start_seconds)
+        end_ms = chunk.start_ms + _seconds_to_milliseconds(end_seconds)
+
+        speaker_label: str | None = None
+        if "speaker_label" in raw and isinstance(raw["speaker_label"], str):
+            speaker_label = raw["speaker_label"]
+        elif "speaker" in raw and isinstance(raw["speaker"], str):
+            speaker_label = raw["speaker"]
+
+        language: str | None = raw["language"] if "language" in raw and isinstance(raw["language"], str) else None
+
+        candidate: dict[str, Any] = {
+            "text": text,
+            "start_ms": start_ms,
+            "end_ms": end_ms,
+            "language": language,
+            "speaker_label": speaker_label,
+            "extra": _extract_segment_extra(raw),
+        }
+        yield candidate
+        yielded = True
+
+    if not yielded:
+        raise RuntimeError(
+            f"Transcription response for asset {chunk.asset_id} "
+            f"(chunk {chunk.start_ms}-{chunk.end_ms} ms) did not contain "
+            f"segments. The 'segments' array was empty or contained no "
+            f"valid entries."
+        )
 
 
 def _parse_seconds(value: Any) -> float | None:

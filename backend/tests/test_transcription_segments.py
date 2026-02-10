@@ -93,7 +93,8 @@ def test_merge_chunk_transcriptions_uses_segments_when_available() -> None:
     assert segments[3].source_asset_id == "asset-b"
 
 
-def test_merge_chunk_transcriptions_falls_back_to_chunk_text() -> None:
+def test_merge_chunk_transcriptions_raises_when_no_segments() -> None:
+    """segments キーのないレスポンスで RuntimeError が発生することを検証。"""
     chunk = _make_chunk(
         asset_id="asset-c",
         start_ms=0,
@@ -103,14 +104,8 @@ def test_merge_chunk_transcriptions_falls_back_to_chunk_text() -> None:
         response={},
     )
 
-    segments = merge_chunk_transcriptions(job_id="job-x", chunk_results=[chunk])
-
-    assert len(segments) == 1
-    segment = segments[0]
-    assert segment.text == "チャンク全体"
-    assert segment.start_ms == 0
-    assert segment.end_ms == 1_000
-    assert segment.language == "en"
+    with pytest.raises(RuntimeError, match="did not contain segments"):
+        merge_chunk_transcriptions(job_id="job-x", chunk_results=[chunk])
 
 
 def test_dump_and_load_transcript_segments(tmp_path: Path) -> None:
@@ -120,7 +115,11 @@ def test_dump_and_load_transcript_segments(tmp_path: Path) -> None:
         end_ms=2_000,
         text="segment",
         language="en",
-        response={},
+        response={
+            "segments": [
+                {"start": 0.0, "end": 2.0, "text": "segment"},
+            ]
+        },
     )
     segments = merge_chunk_transcriptions(job_id="job-storage", chunk_results=[chunk])
     manifest_path = dump_transcript_segments(tmp_path, segments)

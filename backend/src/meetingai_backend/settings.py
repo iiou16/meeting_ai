@@ -20,7 +20,7 @@ class Settings:
     ffmpeg_path: str
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
-    openai_transcription_model: str = "gpt-4o-transcribe"
+    openai_transcription_model: str = "gpt-4o-transcribe-diarize"
     openai_user_agent: str | None = "MeetingAI/0.1"
     openai_request_timeout_seconds: float = 300.0
     openai_max_attempts: int = 3
@@ -61,7 +61,7 @@ class Settings:
         openai_base_url = os.getenv(
             "MEETINGAI_OPENAI_BASE_URL", "https://api.openai.com/v1"
         )
-        openai_model = os.getenv("MEETINGAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe")
+        openai_model = os.getenv("MEETINGAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe-diarize")
         openai_user_agent = (
             os.getenv("MEETINGAI_TRANSCRIBE_USER_AGENT", "MeetingAI/0.1") or None
         )
