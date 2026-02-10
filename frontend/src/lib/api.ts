@@ -13,6 +13,12 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
   return response.json() as Promise<T>;
 }
 
+export interface JobFailure {
+  stage: string;
+  message: string;
+  occurred_at: string;
+}
+
 export interface JobSummary {
   job_id: string;
   status: JobStatus;
@@ -27,6 +33,7 @@ export interface JobSummary {
   languages: string[];
   summary_count: number;
   action_item_count: number;
+  failure?: JobFailure | null;
 }
 
 export interface JobDetail extends JobSummary {
