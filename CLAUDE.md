@@ -31,7 +31,7 @@ MeetingAI は会議動画から自動で文字起こし・要約・アクショ�
 # Frontend 起動
 ./scripts/start-frontend.sh
 ```
-`start-backend.sh` は Redis コンテナ（Docker）、RQ Worker、API サーバーをまとめて起動します。
+`start-backend.sh` は Redis（既存プロセス / Docker / redis-server を自動検出）、RQ Worker、API サーバーをまとめて起動します。
 Ctrl+C で終了すると Worker も自動停止します。
 
 ### Backend (Python) - 個別コマンド
@@ -119,9 +119,13 @@ MEETINGAI_FFMPEG_PATH=/path/to/ffmpeg      # FFmpegパス (PATHにない場合)
 - Linux: `sudo apt-get install ffmpeg`
 
 #### Redis
-ジョブキュー管理に使用。`scripts/start-backend.sh` が Docker コンテナ (`meetingai-redis`) を自動起動します。
+ジョブキュー管理に使用。`scripts/start-backend.sh` が自動検出・起動します（既に稼働中のRedis → Docker → redis-server の順で試行）。
 手動で起動する場合:
 ```bash
+# redis-server がインストール済みの場合
+redis-server --port 6379
+
+# Docker を使う場合
 docker run -d --name meetingai-redis -p 6379:6379 redis:alpine
 ```
 
