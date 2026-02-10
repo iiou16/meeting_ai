@@ -45,12 +45,6 @@ class JobSummary(BaseModel):
     )
     summary_count: int = Field(0, description="Number of summary sections.")
     action_item_count: int = Field(0, description="Number of action items.")
-    stage_index: int = Field(
-        ..., ge=0, description="1-based index of the current processing stage."
-    )
-    stage_count: int = Field(3, description="Total number of processing stages.")
-    stage_key: str = Field(..., description="Key identifying the current stage.")
-    can_delete: bool = Field(True, description="Whether the job can be deleted.")
 
 
 class JobDetail(JobSummary):
@@ -85,33 +79,9 @@ def _calculate_progress(job_directory: Path) -> float:
         return 0.7
     if list(job_directory.glob("audio_chunks/*.wav")):
         return 0.4
-    _source_exts = (
-        "*.mov", "*.mp4", "*.webm",
-        "*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg",
-    )
-    if any(list(job_directory.glob(ext)) for ext in _source_exts):
+    if list(job_directory.glob("*.mov")) or list(job_directory.glob("*.mp4")):
         return 0.2
     return 0.0
-
-
-_STAGE_COUNT = 3
-
-
-def _calculate_stage(job_directory: Path) -> tuple[int, str]:
-    """Return ``(stage_index, stage_key)`` for the current processing phase.
-
-    Stages (1-based):
-      1. ingest   – source file uploaded, audio extraction pending
-      2. transcribe – audio chunks ready, transcription pending
-      3. summarize / summary – transcript ready or summarisation complete
-    """
-    if _has_file(job_directory, "summary_items.json"):
-        return 3, "summary"
-    if _has_file(job_directory, "transcript_segments.json"):
-        return 3, "summarize"
-    if list(job_directory.glob("audio_chunks/*.wav")):
-        return 2, "transcribe"
-    return 1, "ingest"
 
 
 def _determine_status(job_directory: Path) -> JobStatus:
@@ -147,7 +117,6 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
     updated_at = _timestamp_from_stat(job_directory, use_ctime=False)
     status_value = _determine_status(job_directory)
     progress = _calculate_progress(job_directory)
-    stage_index, stage_key = _calculate_stage(job_directory)
 
     return JobSummary(
         job_id=job_id,
@@ -159,10 +128,6 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         languages=languages,
         summary_count=len(summary_items),
         action_item_count=len(action_items),
-        stage_index=stage_index,
-        stage_count=_STAGE_COUNT,
-        stage_key=stage_key,
-        can_delete=True,
     )
 
 

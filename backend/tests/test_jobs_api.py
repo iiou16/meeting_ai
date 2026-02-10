@@ -117,17 +117,6 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
     assert pending["status"] == "pending"
     assert pending["progress"] == 0.2
 
-    # --- stage info assertions ---
-    assert completed["stage_index"] == 3
-    assert completed["stage_count"] == 3
-    assert completed["stage_key"] == "summary"
-    assert completed["can_delete"] is True
-
-    assert pending["stage_index"] == 1
-    assert pending["stage_count"] == 3
-    assert pending["stage_key"] == "ingest"
-    assert pending["can_delete"] is True
-
     detail = client.get("/api/jobs/job-complete")
     assert detail.status_code == 200
     payload = detail.json()
@@ -136,84 +125,5 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
 
     missing = client.get("/api/jobs/not-found")
     assert missing.status_code == 404
-
-    set_settings(None)
-
-
-def test_stage_info_transcribing(tmp_path: Path) -> None:
-    """Job with audio chunks should report stage_key='transcribe', stage_index=2."""
-    job_dir = tmp_path / "job-chunks"
-    job_dir.mkdir()
-    chunks_dir = job_dir / "audio_chunks"
-    chunks_dir.mkdir()
-    (chunks_dir / "chunk_000.wav").write_bytes(b"\x00\x00")
-
-    settings = _make_settings(tmp_path)
-    set_settings(settings)
-
-    client = TestClient(create_app())
-    response = client.get("/api/jobs")
-    assert response.status_code == 200
-    jobs = response.json()
-    job = next(j for j in jobs if j["job_id"] == "job-chunks")
-    assert job["stage_index"] == 2
-    assert job["stage_count"] == 3
-    assert job["stage_key"] == "transcribe"
-
-    set_settings(None)
-
-
-def test_stage_info_summarizing(tmp_path: Path) -> None:
-    """Job with transcript should report stage_key='summarize', stage_index=3."""
-    job_dir = tmp_path / "job-transcript"
-    job_dir.mkdir()
-    segments = [
-        TranscriptSegment(
-            segment_id="seg-1",
-            job_id="job-transcript",
-            order=0,
-            start_ms=0,
-            end_ms=60_000,
-            text="テスト",
-            language="ja",
-            speaker_label=None,
-            source_asset_id="asset-1",
-            extra={},
-        )
-    ]
-    dump_transcript_segments(job_dir, segments)
-
-    settings = _make_settings(tmp_path)
-    set_settings(settings)
-
-    client = TestClient(create_app())
-    response = client.get("/api/jobs")
-    assert response.status_code == 200
-    jobs = response.json()
-    job = next(j for j in jobs if j["job_id"] == "job-transcript")
-    assert job["stage_index"] == 3
-    assert job["stage_count"] == 3
-    assert job["stage_key"] == "summarize"
-
-    set_settings(None)
-
-
-def test_progress_audio_source_file(tmp_path: Path) -> None:
-    """A job directory with an audio source file (e.g. .mp3) should report progress=0.2."""
-    job_dir = tmp_path / "job-audio"
-    job_dir.mkdir()
-    (job_dir / "recording.mp3").write_bytes(b"\x00\x00")
-
-    settings = _make_settings(tmp_path)
-    set_settings(settings)
-
-    client = TestClient(create_app())
-
-    response = client.get("/api/jobs")
-    assert response.status_code == 200
-    jobs = response.json()
-    audio_job = next(job for job in jobs if job["job_id"] == "job-audio")
-    assert audio_job["status"] == "pending"
-    assert audio_job["progress"] == 0.2
 
     set_settings(None)

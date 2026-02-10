@@ -2,19 +2,17 @@ import { MeetingDetailView } from "../../../components/meeting-detail-view";
 import type { Language } from "../../../lib/i18n";
 
 type PageProps = {
-  params: Promise<{ jobId: string }>;
-  searchParams?: Promise<{ lang?: string }>;
+  params: { jobId: string };
+  searchParams?: { lang?: string };
 };
 
-export default async function MeetingPage({ params, searchParams }: PageProps) {
-  const { jobId } = await params;
-  const search = await (searchParams ?? Promise.resolve({} as { lang?: string }));
+export default function MeetingPage({ params, searchParams }: PageProps) {
   const initialLanguage: Language =
-    search.lang === "en" ? "en" : "ja";
+    searchParams?.lang === "en" ? "en" : "ja";
 
   return (
     <MeetingDetailView
-      jobId={jobId}
+      jobId={params.jobId}
       initialLanguage={initialLanguage}
     />
   );
