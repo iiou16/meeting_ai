@@ -46,6 +46,12 @@ type BaseCopy = {
   meetingEmptyAction: string;
   meetingEmptyTranscript: string;
   meetingExportButton: string;
+  stageLabels: Record<string, string>;
+  deleteButton: string;
+  deleteInProgress: string;
+  deleteConfirm: (jobId: string) => string;
+  deleteSuccess: string;
+  deleteError: string;
 };
 
 function jaCopy(): BaseCopy {
@@ -55,9 +61,9 @@ function jaCopy(): BaseCopy {
       "会議録画をアップロードすると、文字起こし・要約・アクションアイテムを自動生成します。",
     uploadSectionTitle: "録画ファイルをアップロード",
     uploadHelpText:
-      "MP4 / MOV / WebM ファイルに対応しています。アップロード後、自動的に処理が開始されます。",
+      "MP4 / MOV / WebM / MP3 / WAV / M4A ファイルに対応しています。アップロード後、自動的に処理が開始されます。",
     uploadButton: "アップロード開始",
-    uploadSelectLabel: "動画ファイル",
+    uploadSelectLabel: "動画・音声ファイル",
     uploadSelectPlaceholder: "ファイルを選択してください",
     uploadSuccess: "アップロードが完了しました。処理状況はジョブ一覧で確認できます。",
     uploadError: "アップロードに失敗しました: ",
@@ -117,6 +123,18 @@ function jaCopy(): BaseCopy {
     meetingEmptyAction: "アクションアイテムは検出されませんでした。",
     meetingEmptyTranscript: "文字起こしが見つかりませんでした。",
     meetingExportButton: "JSONでダウンロード",
+    stageLabels: {
+      ingest: "音声抽出",
+      transcribe: "文字起こし",
+      summarize: "要約生成",
+      summary: "要約生成",
+    },
+    deleteButton: "削除",
+    deleteInProgress: "削除中…",
+    deleteConfirm: (jobId: string) =>
+      `ジョブ ${jobId} を削除してよろしいですか？`,
+    deleteSuccess: "ジョブを削除しました。",
+    deleteError: "ジョブの削除に失敗しました: ",
   };
 }
 
@@ -127,9 +145,9 @@ function enCopy(): BaseCopy {
       "Upload meeting recordings to receive transcripts, summaries, and action items automatically.",
     uploadSectionTitle: "Upload Recording",
     uploadHelpText:
-      "Supports MP4 / MOV / WebM files. Processing starts automatically once the upload finishes.",
+      "Supports MP4 / MOV / WebM / MP3 / WAV / M4A files. Processing starts automatically once the upload finishes.",
     uploadButton: "Start Upload",
-    uploadSelectLabel: "Video file",
+    uploadSelectLabel: "Video / Audio file",
     uploadSelectPlaceholder: "Choose a file",
     uploadSuccess:
       "Upload completed! Track the processing progress in the job list below.",
@@ -190,6 +208,18 @@ function enCopy(): BaseCopy {
     meetingEmptyAction: "No action items detected.",
     meetingEmptyTranscript: "No transcript segments found.",
     meetingExportButton: "Download as JSON",
+    stageLabels: {
+      ingest: "Audio extraction",
+      transcribe: "Transcription",
+      summarize: "Summarisation",
+      summary: "Summarisation",
+    },
+    deleteButton: "Delete",
+    deleteInProgress: "Deleting…",
+    deleteConfirm: (jobId: string) =>
+      `Are you sure you want to delete job ${jobId}?`,
+    deleteSuccess: "Job deleted successfully.",
+    deleteError: "Failed to delete job: ",
   };
 }
 

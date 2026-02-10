@@ -34,13 +34,26 @@ MeetingAI は、会議動画から自動で文字起こし・要約・アクシ�
 
 ### Redis インストール方法
 
-- **macOS**: `brew install redis`（`brew services start redis` で常駐起動）
-- **Windows**:
-  - [Memurai](https://www.memurai.com/) など Windows 向け Redis 互換サーバーを利用するか、WSL 上で以下 Linux 手順を実行
-- **Ubuntu / Debian 系**: `sudo apt-get update && sudo apt-get install redis-server`
-- **Docker**: `docker run -p 6379:6379 redis:7`
+ジョブキュー管理に Redis が必要です。
 
-インストール後、`redis-cli ping` で応答が `PONG` になれば正常に動作しています。
+- **macOS**: `brew install redis && brew services start redis`
+- **Windows**:
+  - [Memurai](https://www.memurai.com/) など Windows 向け Redis 互換サーバーを利用するか、WSL 上で以下手順を実行
+    ```bash
+    sudo apt-get update
+    sudo apt-get install redis-server
+    sudo service redis-server start
+    ```
+- **Ubuntu / Debian 系**: `sudo apt-get update && sudo apt-get install redis-server`
+- **Docker** (推奨):
+  ```bash
+  docker run -d --name redis-meetingai -p 6379:6379 redis:alpine
+  ```
+
+Redis が起動していることを確認:
+```bash
+redis-cli ping  # PONG が返れば正常
+```
 
 ### OpenAI API キー
 
@@ -77,5 +90,5 @@ npm_config_cache=../.npm-cache npm install
 ## ドキュメント
 
 - `Docs/spec.md` … 仕様書
-- `Docs/todo.md` … フェーズ別のTODO管理
+- `Docs/task.md` … フェーズ別のTODO管理
 - `Docs/development.md` … 開発メモ、コマンド例など

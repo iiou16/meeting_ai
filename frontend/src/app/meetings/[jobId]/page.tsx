@@ -3,17 +3,18 @@ import type { Language } from "../../../lib/i18n";
 
 type PageProps = {
   params: Promise<{ jobId: string }>;
-  searchParams?: { lang?: string };
+  searchParams?: Promise<{ lang?: string }>;
 };
 
 export default async function MeetingPage({ params, searchParams }: PageProps) {
-  const resolvedParams = await params;
+  const { jobId } = await params;
+  const search = await (searchParams ?? Promise.resolve({} as { lang?: string }));
   const initialLanguage: Language =
-    searchParams?.lang === "en" ? "en" : "ja";
+    search.lang === "en" ? "en" : "ja";
 
   return (
     <MeetingDetailView
-      jobId={resolvedParams.jobId}
+      jobId={jobId}
       initialLanguage={initialLanguage}
     />
   );
