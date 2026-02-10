@@ -2,24 +2,22 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import traceback
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from redis import Redis
 from rq import Queue, Worker
 from rq.job import Job
 
+from .job_state import mark_job_failed
 from .settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 
 def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:
-    """Write an error marker file to the job directory when an RQ job fails."""
+    """Write a failure marker to the job directory when an RQ job fails."""
     kwargs = job.kwargs
     if kwargs is None:
         logger.error("Failed job has no kwargs; cannot write error marker")
@@ -32,15 +30,16 @@ def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:
         logger.error("Job directory does not exist: %s", job_directory)
         return
 
-    error_info = {
-        "error": str(value),
-        "error_type": f"{typ.__module__}.{typ.__qualname__}",
-        "traceback": traceback.format_exception(typ, value, tb),
-        "failed_at": datetime.now(tz=timezone.utc).isoformat(),
-        "rq_job_id": job.id,
-    }
-    error_path = job_directory / "error.json"
-    error_path.write_text(json.dumps(error_info, ensure_ascii=False, indent=2))
+    mark_job_failed(
+        job_directory,
+        stage="rq_worker",
+        error=str(value),
+        details={
+            "error_type": f"{typ.__module__}.{typ.__qualname__}",
+            "traceback": traceback.format_exception(typ, value, tb),
+            "rq_job_id": job.id,
+        },
+    )
     logger.error("Job %s failed: %s", job_id, value)
 
 
