@@ -31,7 +31,7 @@ class OpenAISummarizationConfig:
     retry_backoff_seconds: float = 2.0
     max_retry_backoff_seconds: float | None = 60.0
     temperature: float = 0.2
-    max_output_tokens: int = 1200
+    max_output_tokens: int = 4096
     requests_per_minute: int | None = None
     user_agent: str | None = "MeetingAI/0.1"
 
@@ -235,6 +235,13 @@ def _call_openai_summary_api(
     if not isinstance(data, Mapping):
         raise SummarizationError("Unexpected response payload from OpenAI.")
 
+    finish_reason = _extract_finish_reason(data)
+    if finish_reason == "length":
+        raise SummarizationError(
+            "Summarization response was truncated due to max_tokens limit. "
+            f"Current max_output_tokens={config.max_output_tokens}."
+        )
+
     content = _extract_message_content(data)
     summary_payload = _decode_summary_json(content)
     summary_payload["_metadata"] = {
@@ -243,6 +250,13 @@ def _call_openai_summary_api(
         "usage": data.get("usage"),
     }
     return summary_payload
+
+
+def _extract_finish_reason(payload: Mapping[str, Any]) -> str | None:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    return choices[0].get("finish_reason")
 
 
 def _extract_message_content(payload: Mapping[str, Any]) -> str:
@@ -538,10 +552,7 @@ def _evaluate_quality_metrics(
                 referenced_orders.add(segment.order)
 
     coverage_ratio = _calculate_coverage_ratio(coverage_ranges, total_duration)
-    if segments:
-        referenced_segments_ratio = len(referenced_orders) / len(segments)
-    else:
-        referenced_segments_ratio = 0.0
+    referenced_segments_ratio = len(referenced_orders) / len(segments)
 
     average_word_count = (
         sum(_word_count(item.summary_text) for item in summary_items)
@@ -589,7 +600,7 @@ def _spans_overlap(
 
 
 def _word_count(text: str) -> int:
-    return len([token for token in text.strip().split() if token])
+    return len(text.split())
 
 
 def _coerce_milliseconds(value: Any) -> int | None:
@@ -650,9 +661,9 @@ def _select_retry_delay(
     response: httpx.Response | None,
 ) -> float:
     base_delay = config.retry_backoff_seconds * (2 ** (attempt - 1))
-    retry_after = None
-    if response is not None:
-        retry_after = _parse_retry_after_seconds(response.headers)
+    retry_after = (
+        _parse_retry_after_seconds(response.headers) if response is not None else None
+    )
     delay = base_delay
     if retry_after is not None:
         delay = max(delay, retry_after)
