@@ -27,6 +27,7 @@ class Settings:
     openai_retry_backoff_seconds: float = 1.0
     openai_max_retry_backoff_seconds: float | None = 30.0
     openai_requests_per_minute: int | None = None
+    openai_max_concurrent_requests: int = 5
     openai_summary_model: str = "gpt-4o-mini"
     openai_summary_temperature: float = 0.2
     openai_summary_request_timeout_seconds: float = 240.0
@@ -117,6 +118,14 @@ class Settings:
                     "MEETINGAI_TRANSCRIBE_REQUESTS_PER_MINUTE must be an integer."
                 ) from exc
 
+        max_concurrent_raw = os.getenv("MEETINGAI_TRANSCRIBE_MAX_CONCURRENT", "5")
+        try:
+            max_concurrent_requests = int(max_concurrent_raw)
+        except ValueError as exc:
+            raise ValueError(
+                "MEETINGAI_TRANSCRIBE_MAX_CONCURRENT must be an integer."
+            ) from exc
+
         summary_model = os.getenv("MEETINGAI_SUMMARY_MODEL", "gpt-4o-mini")
         summary_temperature_raw = os.getenv("MEETINGAI_SUMMARY_TEMPERATURE", "0.2")
         summary_timeout_raw = os.getenv("MEETINGAI_SUMMARY_TIMEOUT", "240")
@@ -198,6 +207,7 @@ class Settings:
             openai_retry_backoff_seconds=retry_backoff_seconds,
             openai_max_retry_backoff_seconds=max_retry_backoff_seconds,
             openai_requests_per_minute=requests_per_minute,
+            openai_max_concurrent_requests=max_concurrent_requests,
             openai_summary_model=summary_model,
             openai_summary_temperature=summary_temperature,
             openai_summary_request_timeout_seconds=summary_timeout_seconds,

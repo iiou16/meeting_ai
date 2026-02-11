@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -66,7 +67,6 @@ def test_transcribe_audio_chunks_success(tmp_path) -> None:
         "transcribed-chunk-0.mp3",
         "transcribed-chunk-1.mp3",
     ]
-    assert calls == [asset.path for asset in assets]
 
 
 def test_transcribe_audio_chunks_retries_on_retriable_error(
@@ -135,6 +135,7 @@ def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> N
     import meetingai_backend.transcription.openai as module
 
     current_time = 0.0
+    time_lock = threading.Lock()
 
     def fake_monotonic() -> float:
         return current_time
@@ -149,11 +150,16 @@ def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> N
     sleep_calls: list[float] = []
 
     def fake_sleep(duration: float) -> None:
-        sleep_calls.append(duration)
         nonlocal current_time
-        current_time += duration
+        with time_lock:
+            sleep_calls.append(duration)
+            current_time += duration
 
-    config = OpenAITranscriptionConfig(api_key="test-key", requests_per_minute=120)
+    config = OpenAITranscriptionConfig(
+        api_key="test-key",
+        requests_per_minute=120,
+        max_concurrent_requests=1,
+    )
     results = transcribe_audio_chunks(
         assets,
         config=config,
@@ -163,6 +169,110 @@ def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> N
 
     assert len(results) == 2
     assert sleep_calls == [pytest.approx(0.5, abs=1e-3)]
+
+
+class TestConcurrentExecution:
+    """transcribe_audio_chunks が複数チャンクを並行処理することを検証する。"""
+
+    def test_chunks_run_concurrently(self, tmp_path: Path) -> None:
+        """max_concurrent_requests=3 で3チャンクが並行して処理されることを確認。"""
+        assets = [
+            _make_chunk_asset(tmp_path, name=f"chunk-{i}.mp3", order=i)
+            for i in range(3)
+        ]
+
+        barrier = threading.Barrier(3, timeout=5)
+
+        def request_fn(
+            *, file_path: Path, config, language, prompt
+        ) -> dict[str, object]:
+            barrier.wait()
+            return {"text": f"transcribed-{file_path.name}", "language": "ja"}
+
+        config = OpenAITranscriptionConfig(
+            api_key="test-key",
+            max_concurrent_requests=3,
+        )
+        results = transcribe_audio_chunks(
+            assets,
+            config=config,
+            request_fn=request_fn,  # type: ignore[arg-type]
+        )
+
+        assert len(results) == 3
+        assert [r.text for r in results] == [
+            "transcribed-chunk-0.mp3",
+            "transcribed-chunk-1.mp3",
+            "transcribed-chunk-2.mp3",
+        ]
+
+    def test_results_ordered_by_chunk_index(self, tmp_path: Path) -> None:
+        """並列実行しても結果がチャンク順序で返されることを確認。"""
+        assets = [
+            _make_chunk_asset(tmp_path, name=f"chunk-{i}.mp3", order=i)
+            for i in range(4)
+        ]
+
+        gate = threading.Event()
+
+        def request_fn(
+            *, file_path: Path, config, language, prompt
+        ) -> dict[str, object]:
+            gate.wait(timeout=5)
+            return {"text": f"text-{file_path.stem}", "language": "en"}
+
+        config = OpenAITranscriptionConfig(
+            api_key="test-key",
+            max_concurrent_requests=4,
+        )
+
+        gate.set()
+        results = transcribe_audio_chunks(
+            assets,
+            config=config,
+            request_fn=request_fn,  # type: ignore[arg-type]
+        )
+
+        assert [r.asset_id for r in results] == [
+            "asset-0",
+            "asset-1",
+            "asset-2",
+            "asset-3",
+        ]
+
+    def test_error_in_one_chunk_propagates(self, tmp_path: Path) -> None:
+        """1チャンクがエラーを投げた場合、TranscriptionError が伝搬されることを確認。"""
+        assets = [
+            _make_chunk_asset(tmp_path, name=f"chunk-{i}.mp3", order=i)
+            for i in range(3)
+        ]
+
+        def request_fn(
+            *, file_path: Path, config, language, prompt
+        ) -> dict[str, object]:
+            if "chunk-1" in file_path.name:
+                raise RuntimeError("simulated failure in chunk-1")
+            return {"text": "ok", "language": "en"}
+
+        config = OpenAITranscriptionConfig(
+            api_key="test-key",
+            max_attempts=1,
+            max_concurrent_requests=3,
+        )
+
+        with pytest.raises(TranscriptionError) as exc_info:
+            transcribe_audio_chunks(
+                assets,
+                config=config,
+                request_fn=request_fn,  # type: ignore[arg-type]
+            )
+
+        assert exc_info.value.asset_id == "asset-1"
+
+    def test_max_concurrent_requests_validation(self) -> None:
+        """max_concurrent_requests が0以下の場合 ValueError が発生することを確認。"""
+        with pytest.raises(ValueError, match="max_concurrent_requests"):
+            OpenAITranscriptionConfig(api_key="test-key", max_concurrent_requests=0)
 
 
 class TestCallOpenaiTranscriptionApiResponseFormat:

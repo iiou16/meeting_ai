@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,6 +53,7 @@ class OpenAITranscriptionConfig:
     max_retry_backoff_seconds: float | None = 30.0
     requests_per_minute: int | None = None
     user_agent: str | None = "MeetingAI/0.1"
+    max_concurrent_requests: int = 5
 
     def __post_init__(self) -> None:
         if not self.api_key:
@@ -68,6 +71,8 @@ class OpenAITranscriptionConfig:
             raise ValueError(
                 "max_retry_backoff_seconds must be positive when provided."
             )
+        if self.max_concurrent_requests < 1:
+            raise ValueError("max_concurrent_requests must be at least 1.")
 
 
 @dataclass(slots=True)
@@ -97,7 +102,7 @@ class ChunkRequestFn(Protocol):
 
 
 class _RateLimiter:
-    """Simple rate limiter that enforces a minimum interval between requests."""
+    """Thread-safe rate limiter that enforces a minimum interval between requests."""
 
     def __init__(
         self,
@@ -110,20 +115,22 @@ class _RateLimiter:
         self._sleep = sleep
         self._now = now
         self._last_request_at: float | None = None
+        self._lock = threading.Lock()
 
     def acquire(self) -> None:
         if self._min_interval_seconds <= 0:
             return
 
-        current = self._now()
-        if self._last_request_at is not None:
-            elapsed = current - self._last_request_at
-            remaining = self._min_interval_seconds - elapsed
-            if remaining > 0:
-                self._sleep(remaining)
-                current = self._now()
+        with self._lock:
+            current = self._now()
+            if self._last_request_at is not None:
+                elapsed = current - self._last_request_at
+                remaining = self._min_interval_seconds - elapsed
+                if remaining > 0:
+                    self._sleep(remaining)
+                    current = self._now()
 
-        self._last_request_at = current
+            self._last_request_at = current
 
     @classmethod
     def from_config(
@@ -140,6 +147,118 @@ class _RateLimiter:
 _RETRIABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
 
 
+def _transcribe_single_chunk(
+    *,
+    chunk_index: int,
+    total_chunks: int,
+    asset: MediaAsset,
+    config: OpenAITranscriptionConfig,
+    language: str | None,
+    prompt: str | None,
+    perform_request: ChunkRequestFn,
+    rate_limiter: _RateLimiter,
+    sleep: Callable[[float], None],
+) -> ChunkTranscriptionResult:
+    """Transcribe a single audio chunk with retries. Thread-safe."""
+    attempt = 0
+    last_exception: Exception | None = None
+
+    while attempt < config.max_attempts:
+        attempt += 1
+        rate_limiter.acquire()
+
+        logger.info(
+            "Transcribing chunk %d/%d (asset=%s, attempt=%d/%d)",
+            chunk_index + 1,
+            total_chunks,
+            asset.asset_id,
+            attempt,
+            config.max_attempts,
+        )
+        request_start = time.monotonic()
+
+        try:
+            payload = perform_request(
+                file_path=asset.path,
+                config=config,
+                language=language,
+                prompt=prompt,
+            )
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            error_text = None
+            if exc.response is not None:
+                try:
+                    error_text = exc.response.text
+                except (AttributeError, UnicodeDecodeError) as read_exc:
+                    logger.warning("Could not read error response text: %s", read_exc)
+            if status in _RETRIABLE_STATUS and attempt < config.max_attempts:
+                delay = _select_retry_delay(
+                    attempt=attempt,
+                    config=config,
+                    response=exc.response,
+                )
+                sleep(delay)
+                last_exception = exc
+                continue
+
+            raise TranscriptionError(
+                f"transcription failed with status {status}: {error_text}",
+                asset_id=asset.asset_id,
+                status_code=status,
+            ) from exc
+        except httpx.RequestError as exc:
+            if attempt < config.max_attempts:
+                delay = _select_retry_delay(
+                    attempt=attempt,
+                    config=config,
+                    response=None,
+                )
+                sleep(delay)
+                last_exception = exc
+                continue
+
+            raise TranscriptionError(
+                "transcription request failed due to network error",
+                asset_id=asset.asset_id,
+                status_code=None,
+            ) from exc
+        except Exception as exc:
+            raise TranscriptionError(
+                "unexpected error during transcription",
+                asset_id=asset.asset_id,
+                status_code=None,
+            ) from exc
+
+        elapsed = time.monotonic() - request_start
+        logger.info(
+            "Chunk %d/%d transcribed in %.1fs (asset=%s)",
+            chunk_index + 1,
+            total_chunks,
+            elapsed,
+            asset.asset_id,
+        )
+
+        text = _extract_transcript_text(payload, asset_id=asset.asset_id)
+        detected_language = _extract_language(payload)
+
+        return ChunkTranscriptionResult(
+            asset_id=asset.asset_id,
+            text=text,
+            start_ms=asset.start_ms,
+            end_ms=asset.end_ms,
+            duration_ms=asset.duration_ms,
+            language=detected_language or language,
+            response=(dict(payload) if isinstance(payload, dict) else {"raw": payload}),
+        )
+
+    raise TranscriptionError(
+        "exhausted retries while transcribing audio chunk",
+        asset_id=asset.asset_id,
+        status_code=None,
+    ) from last_exception
+
+
 def transcribe_audio_chunks(
     chunk_assets: Sequence[MediaAsset],
     *,
@@ -149,124 +268,55 @@ def transcribe_audio_chunks(
     request_fn: ChunkRequestFn | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> list[ChunkTranscriptionResult]:
-    """Transcribe the provided audio chunks with retries and basic rate limiting."""
+    """Transcribe the provided audio chunks concurrently with retries and rate limiting."""
     if not chunk_assets:
         return []
 
-    rate_limiter = _RateLimiter.from_config(config, sleep=sleep)
-    perform_request = request_fn or _call_openai_transcription_api
-    results: list[ChunkTranscriptionResult] = []
-
-    for chunk_index, asset in enumerate(chunk_assets):
+    for asset in chunk_assets:
         if not asset.path.exists():
             raise FileNotFoundError(f"audio chunk file does not exist: {asset.path}")
 
-        attempt = 0
-        last_exception: Exception | None = None
+    rate_limiter = _RateLimiter.from_config(config, sleep=sleep)
+    perform_request = request_fn or _call_openai_transcription_api
+    total_chunks = len(chunk_assets)
 
-        while attempt < config.max_attempts:
-            attempt += 1
-            rate_limiter.acquire()
+    max_workers = min(config.max_concurrent_requests, total_chunks)
 
-            logger.info(
-                "Transcribing chunk %d/%d (asset=%s, attempt=%d/%d)",
-                chunk_index + 1,
-                len(chunk_assets),
-                asset.asset_id,
-                attempt,
-                config.max_attempts,
+    indexed_results: dict[int, ChunkTranscriptionResult] = {}
+    first_error: Exception | None = None
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures: dict[Future[ChunkTranscriptionResult], int] = {}
+        for chunk_index, asset in enumerate(chunk_assets):
+            future = executor.submit(
+                _transcribe_single_chunk,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+                asset=asset,
+                config=config,
+                language=language,
+                prompt=prompt,
+                perform_request=perform_request,
+                rate_limiter=rate_limiter,
+                sleep=sleep,
             )
-            request_start = time.monotonic()
+            futures[future] = chunk_index
 
+        for future in as_completed(futures):
+            chunk_index = futures[future]
             try:
-                payload = perform_request(
-                    file_path=asset.path,
-                    config=config,
-                    language=language,
-                    prompt=prompt,
-                )
-            except httpx.HTTPStatusError as exc:
-                status = exc.response.status_code if exc.response is not None else None
-                error_text = None
-                if exc.response is not None:
-                    try:
-                        error_text = exc.response.text
-                    except (AttributeError, UnicodeDecodeError) as read_exc:
-                        logger.warning(
-                            "Could not read error response text: %s", read_exc
-                        )
-                if status in _RETRIABLE_STATUS and attempt < config.max_attempts:
-                    delay = _select_retry_delay(
-                        attempt=attempt,
-                        config=config,
-                        response=exc.response,
-                    )
-                    sleep(delay)
-                    last_exception = exc
-                    continue
-
-                raise TranscriptionError(
-                    f"transcription failed with status {status}: {error_text}",
-                    asset_id=asset.asset_id,
-                    status_code=status,
-                ) from exc
-            except httpx.RequestError as exc:
-                if attempt < config.max_attempts:
-                    delay = _select_retry_delay(
-                        attempt=attempt,
-                        config=config,
-                        response=None,
-                    )
-                    sleep(delay)
-                    last_exception = exc
-                    continue
-
-                raise TranscriptionError(
-                    "transcription request failed due to network error",
-                    asset_id=asset.asset_id,
-                    status_code=None,
-                ) from exc
+                result = future.result()
             except Exception as exc:
-                raise TranscriptionError(
-                    "unexpected error during transcription",
-                    asset_id=asset.asset_id,
-                    status_code=None,
-                ) from exc
+                first_error = exc
+                for pending in futures:
+                    pending.cancel()
+                break
+            indexed_results[chunk_index] = result
 
-            elapsed = time.monotonic() - request_start
-            logger.info(
-                "Chunk %d/%d transcribed in %.1fs (asset=%s)",
-                chunk_index + 1,
-                len(chunk_assets),
-                elapsed,
-                asset.asset_id,
-            )
+    if first_error is not None:
+        raise first_error
 
-            text = _extract_transcript_text(payload, asset_id=asset.asset_id)
-            detected_language = _extract_language(payload)
-
-            results.append(
-                ChunkTranscriptionResult(
-                    asset_id=asset.asset_id,
-                    text=text,
-                    start_ms=asset.start_ms,
-                    end_ms=asset.end_ms,
-                    duration_ms=asset.duration_ms,
-                    language=detected_language or language,
-                    response=(
-                        dict(payload) if isinstance(payload, dict) else {"raw": payload}
-                    ),
-                )
-            )
-            break
-        else:
-            raise TranscriptionError(
-                "exhausted retries while transcribing audio chunk",
-                asset_id=asset.asset_id,
-                status_code=None,
-            ) from last_exception
-
-    return results
+    return [indexed_results[i] for i in range(total_chunks)]
 
 
 def _call_openai_transcription_api(
