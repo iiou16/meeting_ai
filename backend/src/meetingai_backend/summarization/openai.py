@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol, Sequence
@@ -265,11 +266,42 @@ def _extract_message_content(payload: Mapping[str, Any]) -> str:
     raise SummarizationError("OpenAI response missing textual content.")
 
 
+def _sanitize_json_string(raw: str) -> str:
+    """Remove common JSON syntax issues produced by LLMs.
+
+    Handles:
+    - Trailing commas before ``}`` or ``]``
+    - Single-line ``//`` comments
+    - Block ``/* ... */`` comments
+    """
+    # Strip single-line comments (// ...) that are NOT inside strings.
+    # A simple heuristic: remove // comments only when they appear after
+    # the last quote on the line (i.e. outside a string value).
+    text = re.sub(r"(?m)//[^\n]*$", "", raw)
+    # Strip block comments.
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    # Remove trailing commas before closing braces/brackets.
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    return text
+
+
 def _decode_summary_json(content: str) -> dict[str, Any]:
     try:
         decoded = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise SummarizationError("Model returned invalid JSON content.") from exc
+    except json.JSONDecodeError:
+        sanitized = _sanitize_json_string(content)
+        logger.warning(
+            "Raw JSON from model was invalid; retrying after sanitization "
+            "(original %d chars, sanitized %d chars)",
+            len(content),
+            len(sanitized),
+        )
+        try:
+            decoded = json.loads(sanitized)
+        except json.JSONDecodeError as exc:
+            raise SummarizationError(
+                f"Model returned invalid JSON content even after sanitization: {exc}"
+            ) from exc
 
     if not isinstance(decoded, dict):
         raise SummarizationError("Decoded summary payload must be a JSON object.")

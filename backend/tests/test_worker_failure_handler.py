@@ -123,15 +123,18 @@ class TestOnJobFailure:
 
         assert not (tmp_path / "nonexistent-job" / "job_failed.json").exists()
 
-    def test_existing_failure_record_is_not_overwritten(self, tmp_path: Path) -> None:
-        """タスク側で既に失敗記録が書かれている場合、_on_job_failure は上書きしない。"""
+    def test_existing_failure_record_preserves_stage_and_adds_details(
+        self, tmp_path: Path
+    ) -> None:
+        """タスク側で既に失敗記録が書かれている場合、ステージとメッセージを
+        維持しつつトレースバック等の詳細を追記する。"""
         job_dir = tmp_path / "test-job-id"
         job_dir.mkdir()
 
-        # タスク側で先に失敗記録を書く
+        # タスク側で先に失敗記録を書く（detailsなし）
         mark_job_failed(job_dir, stage="transcription", error="original error")
 
-        mock_job = _make_mock_job("test-job-id")
+        mock_job = _make_mock_job("test-job-id", rq_job_id="rq-789")
         mock_job.func_name = (
             "meetingai_backend.tasks.transcribe.transcribe_audio_for_job"
         )
@@ -147,11 +150,16 @@ class TestOnJobFailure:
                 tb = sys.exc_info()[2]
                 _on_job_failure(mock_job, RuntimeError, exc, tb)
 
-        # 元の失敗記録が保持されていること
+        # ステージとメッセージはタスク側の記録が保持されること
         record = load_job_failure(job_dir)
         assert record is not None
         assert record.stage == "transcription"
         assert "original error" in record.message
+
+        # トレースバック等の詳細が追記されていること
+        assert record.details["rq_job_id"] == "rq-789"
+        assert "traceback" in record.details
+        assert any("worker-level error" in line for line in record.details["traceback"])
 
 
 class TestInferStageFromJob:

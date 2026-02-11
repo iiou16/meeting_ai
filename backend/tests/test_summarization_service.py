@@ -329,3 +329,91 @@ class TestSummaryTimestampClamping:
 
         assert len(bundle.action_items) == 1
         assert bundle.action_items[0].description == "Valid action item."
+
+
+class TestSanitizeJsonString:
+    """_sanitize_json_string による不正JSON前処理のテスト。"""
+
+    def test_trailing_comma_in_object(self) -> None:
+        from meetingai_backend.summarization.openai import _sanitize_json_string
+
+        raw = '{"a": 1, "b": 2,}'
+        assert _sanitize_json_string(raw) == '{"a": 1, "b": 2}'
+
+    def test_trailing_comma_in_array(self) -> None:
+        from meetingai_backend.summarization.openai import _sanitize_json_string
+
+        raw = "[1, 2, 3,]"
+        assert _sanitize_json_string(raw) == "[1, 2, 3]"
+
+    def test_trailing_comma_with_whitespace(self) -> None:
+        from meetingai_backend.summarization.openai import _sanitize_json_string
+
+        raw = '{"a": 1 ,\n  }'
+        result = _sanitize_json_string(raw)
+        import json
+
+        assert json.loads(result) == {"a": 1}
+
+    def test_nested_trailing_commas(self) -> None:
+        from meetingai_backend.summarization.openai import _sanitize_json_string
+
+        raw = '{"items": [{"x": 1,}, {"y": 2,},],}'
+        result = _sanitize_json_string(raw)
+        import json
+
+        parsed = json.loads(result)
+        assert parsed == {"items": [{"x": 1}, {"y": 2}]}
+
+    def test_single_line_comment_removed(self) -> None:
+        from meetingai_backend.summarization.openai import _sanitize_json_string
+
+        raw = '{"a": 1 // this is a comment\n}'
+        result = _sanitize_json_string(raw)
+        import json
+
+        assert json.loads(result) == {"a": 1}
+
+    def test_block_comment_removed(self) -> None:
+        from meetingai_backend.summarization.openai import _sanitize_json_string
+
+        raw = '{"a": /* comment */ 1}'
+        result = _sanitize_json_string(raw)
+        import json
+
+        assert json.loads(result) == {"a": 1}
+
+    def test_valid_json_unchanged(self) -> None:
+        from meetingai_backend.summarization.openai import _sanitize_json_string
+
+        raw = '{"a": 1, "b": [2, 3]}'
+        assert _sanitize_json_string(raw) == raw
+
+
+class TestDecodeSummaryJson:
+    """_decode_summary_json のテスト（前処理込み）。"""
+
+    def test_valid_json_parsed(self) -> None:
+        from meetingai_backend.summarization.openai import _decode_summary_json
+
+        result = _decode_summary_json('{"summary_sections": [], "action_items": []}')
+        assert result == {"summary_sections": [], "action_items": []}
+
+    def test_trailing_comma_recovered(self) -> None:
+        from meetingai_backend.summarization.openai import _decode_summary_json
+
+        raw = '{"summary_sections": [{"summary": "test", "start_ms": 0, "end_ms": 1000,},], "action_items": [],}'
+        result = _decode_summary_json(raw)
+        assert result["summary_sections"][0]["summary"] == "test"
+
+    def test_completely_invalid_json_raises(self) -> None:
+        from meetingai_backend.summarization.openai import _decode_summary_json
+
+        with pytest.raises(SummarizationError, match="even after sanitization"):
+            _decode_summary_json("this is not json at all")
+
+    def test_non_object_json_raises(self) -> None:
+        from meetingai_backend.summarization.openai import _decode_summary_json
+
+        with pytest.raises(SummarizationError, match="must be a JSON object"):
+            _decode_summary_json("[1, 2, 3]")

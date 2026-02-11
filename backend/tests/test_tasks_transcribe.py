@@ -35,12 +35,12 @@ def _prepare_job_directory(tmp_path: Path) -> tuple[Path, MediaAsset, MediaAsset
         end_ms=4_000,
         sample_rate=16_000,
         channels=1,
-        bit_depth=16,
+        bit_depth=None,
         parent_asset_id=None,
         extra={},
     )
 
-    chunk_path = chunk_dir / "chunk_0000.wav"
+    chunk_path = chunk_dir / "chunk_0000.mp3"
     chunk_path.write_bytes(b"audio")
     chunk_asset = MediaAsset(
         asset_id="chunk-asset",
@@ -53,7 +53,7 @@ def _prepare_job_directory(tmp_path: Path) -> tuple[Path, MediaAsset, MediaAsset
         end_ms=2_000,
         sample_rate=16_000,
         channels=1,
-        bit_depth=16,
+        bit_depth=None,
         parent_asset_id=master_asset.asset_id,
         extra={},
     )

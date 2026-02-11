@@ -18,8 +18,8 @@ SRC_ROOT = BACKEND_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from meetingai_backend.media import AudioExtractionConfig, extract_audio_to_wav
-from meetingai_backend.media.chunking import AudioChunkSpec, split_wav_into_chunks
+from meetingai_backend.media import AudioExtractionConfig, extract_audio
+from meetingai_backend.media.chunking import AudioChunkSpec, split_audio_into_chunks
 from meetingai_backend.settings import get_settings
 from meetingai_backend.transcription import (
     OpenAITranscriptionConfig,
@@ -63,26 +63,29 @@ def _build_transcription_config(settings) -> OpenAITranscriptionConfig:
         max_retry_backoff_seconds=settings.openai_max_retry_backoff_seconds,
         requests_per_minute=settings.openai_requests_per_minute,
         user_agent=settings.openai_user_agent,
+        max_concurrent_requests=settings.openai_max_concurrent_requests,
     )
 
 
-def _ensure_wav(input_path: Path, *, temp_dir: Path) -> Path:
-    if input_path.suffix.lower() == ".wav" and input_path.exists():
+def _ensure_audio(input_path: Path, *, temp_dir: Path) -> Path:
+    if input_path.suffix.lower() == ".mp3" and input_path.exists():
         destination = temp_dir / input_path.name
         shutil.copy2(input_path, destination)
         return destination
 
     settings = get_settings()
     config = AudioExtractionConfig(ffmpeg_path=settings.ffmpeg_path)
-    return extract_audio_to_wav(input_path, output_dir=temp_dir, config=config)
+    return extract_audio(input_path, output_dir=temp_dir, config=config)
 
 
-def _chunk_audio(job_id: str, wav_path: Path) -> Sequence[AudioChunkSpec]:
-    return split_wav_into_chunks(
-        wav_path,
+def _chunk_audio(job_id: str, audio_path: Path) -> Sequence[AudioChunkSpec]:
+    settings = get_settings()
+    return split_audio_into_chunks(
+        audio_path,
         job_id=job_id,
         parent_asset_id=None,
-        output_dir=wav_path.parent / "chunks",
+        output_dir=audio_path.parent / "chunks",
+        ffmpeg_path=settings.ffmpeg_path,
     )
 
 
@@ -134,8 +137,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory(prefix="meetingai_transcribe_") as tmp_dir:
         temp_dir = Path(tmp_dir)
-        wav_path = _ensure_wav(source_path, temp_dir=temp_dir)
-        chunk_specs = list(_chunk_audio(job_id, wav_path))
+        audio_path = _ensure_audio(source_path, temp_dir=temp_dir)
+        chunk_specs = list(_chunk_audio(job_id, audio_path))
 
         if not chunk_specs:
             raise RuntimeError("chunking pipeline produced no audio chunks.")

@@ -122,14 +122,23 @@ def _has_source_video(job_directory: Path) -> bool:
 
 
 def _detect_stage(job_directory: Path) -> tuple[int, str]:
+    """Detect the current in-progress stage based on completed artifacts.
+
+    Each artifact indicates the *previous* stage completed, so we return the
+    *next* stage (the one currently in progress).  For example, when
+    ``audio_chunks/*.mp3`` (or legacy ``*.wav``) files exist, chunking has
+    finished and transcription is the active stage.
+    """
     if _has_file(job_directory, "summary_items.json"):
         return _STAGE_COUNT, JOB_STAGE_SUMMARY
     if _has_file(job_directory, "transcript_segments.json"):
-        return 3, JOB_STAGE_TRANSCRIPTION
-    if list(job_directory.glob("audio_chunks/*.wav")):
-        return 2, JOB_STAGE_CHUNKING
+        return 3, JOB_STAGE_SUMMARY
+    if list(job_directory.glob("audio_chunks/*.mp3")) or list(
+        job_directory.glob("audio_chunks/*.wav")
+    ):
+        return 2, JOB_STAGE_TRANSCRIPTION
     if _has_source_video(job_directory):
-        return 1, JOB_STAGE_UPLOAD
+        return 1, JOB_STAGE_CHUNKING
     return 1, JOB_STAGE_UPLOAD
 
 

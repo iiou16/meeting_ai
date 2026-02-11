@@ -18,16 +18,17 @@ class AudioExtractionConfig:
     ffmpeg_path: str
     sample_rate: int = 16_000
     channels: int = 1
-    audio_codec: str = "pcm_s16le"
+    audio_codec: str = "libmp3lame"
+    bitrate: str = "64k"
 
 
-def extract_audio_to_wav(
+def extract_audio(
     source: Path,
     *,
     output_dir: Path | None = None,
     config: AudioExtractionConfig | None = None,
 ) -> Path:
-    """Extract a mono WAV file from the provided video or audio file path."""
+    """Extract a mono MP3 file from the provided video or audio file path."""
     if not source.exists():
         raise FileNotFoundError(f"media file does not exist: {source}")
 
@@ -35,9 +36,7 @@ def extract_audio_to_wav(
     destination_dir.mkdir(parents=True, exist_ok=True)
 
     # 出力ファイル名に "_audio" を付けて入力ファイルとの衝突を防ぐ。
-    # .wavファイルを同じディレクトリに変換する場合、入力と出力が同一パスに
-    # なりFFmpegがエラーを出すため。
-    destination = destination_dir / f"{source.stem}_audio.wav"
+    destination = destination_dir / f"{source.stem}_audio.mp3"
 
     extractor_config = config or AudioExtractionConfig(ffmpeg_path="ffmpeg")
 
@@ -56,6 +55,8 @@ def extract_audio_to_wav(
         str(extractor_config.sample_rate),
         "-ac",
         str(extractor_config.channels),
+        "-b:a",
+        extractor_config.bitrate,
         str(destination),
     ]
 
@@ -78,4 +79,4 @@ def extract_audio_to_wav(
     return destination
 
 
-__all__ = ["AudioExtractionConfig", "AudioExtractionError", "extract_audio_to_wav"]
+__all__ = ["AudioExtractionConfig", "AudioExtractionError", "extract_audio"]
