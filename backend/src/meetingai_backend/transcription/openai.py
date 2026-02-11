@@ -16,6 +16,16 @@ from ..media import MediaAsset
 
 logger = logging.getLogger(__name__)
 
+_EXTENSION_MIME_TYPES: dict[str, str] = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".webm": "audio/webm",
+}
+
 
 class TranscriptionError(RuntimeError):
     """Raised when a transcription request ultimately fails."""
@@ -291,12 +301,20 @@ def _call_openai_transcription_api(
     if prompt:
         data["prompt"] = prompt
 
+    extension = file_path.suffix.lower()
+    if extension not in _EXTENSION_MIME_TYPES:
+        raise ValueError(
+            f"Unsupported audio file extension '{extension}' for file {file_path}. "
+            f"Supported extensions: {sorted(_EXTENSION_MIME_TYPES.keys())}"
+        )
+    mime_type = _EXTENSION_MIME_TYPES[extension]
+
     with file_path.open("rb") as audio_file:
         response = httpx.post(
             url,
             headers=headers,
             data=data,
-            files={"file": (file_path.name, audio_file, "audio/wav")},
+            files={"file": (file_path.name, audio_file, mime_type)},
             timeout=config.request_timeout_seconds,
         )
 
