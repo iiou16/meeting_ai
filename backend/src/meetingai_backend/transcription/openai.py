@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _EXTENSION_MIME_TYPES: dict[str, str] = {
     ".mp3": "audio/mpeg",
     ".wav": "audio/wav",
-    ".mp4": "audio/mp4",
+    ".mp4": "video/mp4",
     ".m4a": "audio/mp4",
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",

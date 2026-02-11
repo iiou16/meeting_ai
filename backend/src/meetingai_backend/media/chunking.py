@@ -23,10 +23,16 @@ class AudioChunkSpec:
 def _derive_ffprobe_path(ffmpeg_path: str) -> str:
     """Derive the ffprobe binary path from the ffmpeg binary path.
 
-    Assumes ffprobe is located in the same directory as ffmpeg.
+    If ffmpeg_path is a bare command name (no directory component), return
+    "ffprobe" so that it is resolved via PATH.  If ffmpeg_path is an absolute
+    or relative path, assume ffprobe lives in the same directory.
     """
     ffmpeg = Path(ffmpeg_path)
-    return str(ffmpeg.parent / "ffprobe") if ffmpeg.parent != Path(".") else "ffprobe"
+    if ffmpeg.parent == Path("."):
+        # Bare command name like "ffmpeg" — let the OS resolve via PATH.
+        return "ffprobe"
+    # Absolute or relative path — assume ffprobe sits next to ffmpeg.
+    return str(ffmpeg.parent / "ffprobe")
 
 
 def _get_duration_seconds(source: Path, *, ffprobe_path: str) -> float:
@@ -71,12 +77,8 @@ def _cut_chunk(
     start_seconds: float,
     duration_seconds: float,
     ffmpeg_path: str,
-    audio_codec: str = "libmp3lame",
-    bitrate: str = "64k",
-    sample_rate: int = 16_000,
-    channels: int = 1,
 ) -> None:
-    """Cut a single chunk from the source audio using FFmpeg."""
+    """Cut a single chunk from the source audio using FFmpeg with stream copy."""
     command = [
         ffmpeg_path,
         "-hide_banner",
@@ -90,13 +92,7 @@ def _cut_chunk(
         "-i",
         str(source),
         "-c:a",
-        audio_codec,
-        "-b:a",
-        bitrate,
-        "-ar",
-        str(sample_rate),
-        "-ac",
-        str(channels),
+        "copy",
         str(output_path),
     ]
 
@@ -154,8 +150,6 @@ def split_audio_into_chunks(
             start_seconds=position_seconds,
             duration_seconds=chunk_length,
             ffmpeg_path=ffmpeg_path,
-            sample_rate=sample_rate,
-            channels=channels,
         )
 
         start_ms = int(round(position_seconds * 1000))
