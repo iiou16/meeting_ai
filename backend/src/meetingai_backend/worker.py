@@ -58,9 +58,22 @@ def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:
         logger.error("Job directory does not exist: %s", job_directory)
         return
 
-    # タスク側で既に失敗記録が書かれている場合はステージを維持する。
+    failure_details = {
+        "error_type": f"{typ.__module__}.{typ.__qualname__}",
+        "traceback": traceback.format_exception(typ, value, tb),
+        "rq_job_id": job.id,
+    }
+
+    # タスク側で既に失敗記録が書かれている場合はステージを維持しつつ
+    # トレースバック等の詳細を追記する。
     existing = load_job_failure(job_directory)
     if existing is not None:
+        mark_job_failed(
+            job_directory,
+            stage=existing.stage,
+            error=existing.message,
+            details={**existing.details, **failure_details},
+        )
         logger.error("Job %s failed: %s", job_id, value)
         return
 
@@ -71,11 +84,7 @@ def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:
         job_directory,
         stage=stage,
         error=str(value),
-        details={
-            "error_type": f"{typ.__module__}.{typ.__qualname__}",
-            "traceback": traceback.format_exception(typ, value, tb),
-            "rq_job_id": job.id,
-        },
+        details=failure_details,
     )
     logger.error("Job %s failed: %s", job_id, value)
 
