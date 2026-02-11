@@ -123,7 +123,7 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
     assert pending["progress"] == 0.25
     assert pending["stage_index"] == 1
     assert pending["stage_count"] == 4
-    assert pending["stage_key"] == "upload"
+    assert pending["stage_key"] == "chunking"
     assert pending["can_delete"] is False
 
     detail = client.get("/api/jobs/job-complete")
@@ -139,7 +139,7 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
 
 
 def test_stage_info_transcribing(tmp_path: Path) -> None:
-    """Job with audio chunks should report stage_key='chunking', stage_index=2."""
+    """Job with audio chunks should report stage_key='transcription', stage_index=2."""
     job_dir = tmp_path / "job-chunks"
     job_dir.mkdir()
     chunks_dir = job_dir / "audio_chunks"
@@ -156,13 +156,13 @@ def test_stage_info_transcribing(tmp_path: Path) -> None:
     job = next(j for j in jobs if j["job_id"] == "job-chunks")
     assert job["stage_index"] == 2
     assert job["stage_count"] == 4
-    assert job["stage_key"] == "chunking"
+    assert job["stage_key"] == "transcription"
 
     set_settings(None)
 
 
 def test_stage_info_summarizing(tmp_path: Path) -> None:
-    """Job with transcript should report stage_key='transcription', stage_index=3."""
+    """Job with transcript should report stage_key='summary', stage_index=3."""
     job_dir = tmp_path / "job-transcript"
     job_dir.mkdir()
     segments = [
@@ -191,7 +191,7 @@ def test_stage_info_summarizing(tmp_path: Path) -> None:
     job = next(j for j in jobs if j["job_id"] == "job-transcript")
     assert job["stage_index"] == 3
     assert job["stage_count"] == 4
-    assert job["stage_key"] == "transcription"
+    assert job["stage_key"] == "summary"
 
     set_settings(None)
 
