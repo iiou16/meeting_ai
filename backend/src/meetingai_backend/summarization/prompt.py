@@ -6,7 +6,7 @@ from typing import Iterable, Sequence
 
 from ..transcription.segments import TranscriptSegment
 
-_DEFAULT_MAX_TOTAL_CHARACTERS = 80000
+_DEFAULT_MAX_TOTAL_CHARACTERS = 200000
 _DEFAULT_SEGMENT_SNIPPET_LENGTH = 1600
 _DEFAULT_MAX_SECTION_SPAN_MS = 600_000
 _DEFAULT_MIN_SUMMARY_SECTIONS = 3
@@ -32,18 +32,28 @@ def build_summary_prompt(
     if not isinstance(segments, Iterable):
         raise TypeError("segments must be an iterable of TranscriptSegment")
 
-    valid_segments: list[TranscriptSegment] = []
+    # --- Phase 1: collect all valid segments (before truncation) ---
+    all_valid_segments: list[TranscriptSegment] = [
+        seg
+        for seg in segments
+        if isinstance(seg, TranscriptSegment) and seg.text.strip()
+    ]
+
+    if not all_valid_segments:
+        raise ValueError(
+            "segments must contain at least one TranscriptSegment with text"
+        )
+
+    # Compute meeting duration from ALL segments, not just those that fit.
+    first_start = min(seg.start_ms for seg in all_valid_segments)
+    last_end = max(seg.end_ms for seg in all_valid_segments)
+    meeting_duration_ms = max(1, last_end - first_start)
+
+    # --- Phase 2: build transcript block up to character budget ---
     lines: list[str] = []
     total = 0
 
-    for segment in segments:
-        if not isinstance(segment, TranscriptSegment):
-            continue
-        if not segment.text.strip():
-            continue
-
-        valid_segments.append(segment)
-
+    for segment in all_valid_segments:
         formatted = _format_segment(segment, snippet_length=segment_snippet_length)
         projected_total = total + len(formatted) + 1  # newline
         if projected_total > max_total_characters and lines:
@@ -52,16 +62,17 @@ def build_summary_prompt(
         lines.append(formatted)
         total = projected_total
 
-    if not valid_segments:
-        raise ValueError(
-            "segments must contain at least one TranscriptSegment with text"
-        )
+    was_truncated = len(lines) < len(all_valid_segments)
 
     transcript_block = "\n".join(lines)
 
-    first_start = min(segment.start_ms for segment in valid_segments)
-    last_end = max(segment.end_ms for segment in valid_segments)
-    meeting_duration_ms = max(1, last_end - first_start)
+    # Append truncation notice so the model knows it's working with partial data.
+    if was_truncated:
+        transcript_block += (
+            f"\n\n[NOTE: Showing {len(lines)}/{len(all_valid_segments)} snippets."
+            f" Full meeting spans {first_start}ms–{last_end}ms."
+            " Summarize the ENTIRE meeting duration proportionally.]"
+        )
     meeting_duration_minutes = meeting_duration_ms / 60000
 
     target_sections = (
@@ -103,7 +114,10 @@ def build_summary_prompt(
         " Each summary section must include `summary`, `start_ms`, `end_ms`, and may include"
         " optional fields `title`, `highlights` (1-3 short bullet strings), and `priority`. Each action item must include"
         " `description`, and may include `owner`, `due_date`, `start_ms`, `end_ms`, and `priority`."
-        " Start times and end times should align with the transcript context you are summarising."
+        " For each summary section, set start_ms to the timestamp of the FIRST snippet relevant to that topic"
+        " and end_ms to the timestamp of the LAST snippet relevant to that topic."
+        " Each section should span several minutes of discussion — do NOT copy a single snippet's narrow range."
+        ' Example: a topic discussed from minute 1 to minute 7 → "start_ms": 60000, "end_ms": 420000.'
         f"{pacing_instruction}"
         "\n\n"
         "CRITICAL — Summary detail level:\n"

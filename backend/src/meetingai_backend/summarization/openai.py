@@ -18,6 +18,8 @@ from .prompt import build_summary_prompt
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS: int = 4096
+
 
 @dataclass(slots=True)
 class OpenAISummarizationConfig:
@@ -31,7 +33,7 @@ class OpenAISummarizationConfig:
     retry_backoff_seconds: float = 2.0
     max_retry_backoff_seconds: float | None = 60.0
     temperature: float = 0.2
-    max_output_tokens: int = 4096
+    max_output_tokens: int = DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS
     requests_per_minute: int | None = None
     user_agent: str | None = "MeetingAI/0.1"
 
@@ -600,7 +602,32 @@ def _spans_overlap(
 
 
 def _word_count(text: str) -> int:
-    return len(text.split())
+    """Return a word-count metric appropriate for the text's language.
+
+    For CJK-dominant text (Japanese, Chinese, Korean) where whitespace
+    tokenization is meaningless, return the character count instead.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return 0
+    cjk_chars = sum(1 for ch in stripped if _is_cjk(ch))
+    if len(stripped) > 0 and cjk_chars / len(stripped) >= 0.3:
+        return len(stripped)
+    return len(stripped.split())
+
+
+def _is_cjk(ch: str) -> bool:
+    """Return True if *ch* is a CJK ideograph or kana character."""
+    cp = ord(ch)
+    return (
+        0x4E00 <= cp <= 0x9FFF  # CJK Unified Ideographs
+        or 0x3400 <= cp <= 0x4DBF  # CJK Unified Ideographs Extension A
+        or 0x3040 <= cp <= 0x309F  # Hiragana
+        or 0x30A0 <= cp <= 0x30FF  # Katakana
+        or 0xAC00 <= cp <= 0xD7AF  # Hangul Syllables
+        or 0xF900 <= cp <= 0xFAFF  # CJK Compatibility Ideographs
+        or 0x20000 <= cp <= 0x2A6DF  # CJK Extension B
+    )
 
 
 def _coerce_milliseconds(value: Any) -> int | None:
@@ -687,6 +714,7 @@ def _parse_retry_after_seconds(headers: Mapping[str, str]) -> float | None:
 
 
 __all__ = [
+    "DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS",
     "OpenAISummarizationConfig",
     "SummaryRequestFn",
     "SummarizationError",
