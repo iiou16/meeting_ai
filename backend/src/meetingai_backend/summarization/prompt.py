@@ -6,11 +6,11 @@ from typing import Iterable, Sequence
 
 from ..transcription.segments import TranscriptSegment
 
-_DEFAULT_MAX_TOTAL_CHARACTERS = 20000
+_DEFAULT_MAX_TOTAL_CHARACTERS = 80000
 _DEFAULT_SEGMENT_SNIPPET_LENGTH = 1600
-_DEFAULT_MAX_SECTION_SPAN_MS = 300_000
-_DEFAULT_MIN_SUMMARY_SECTIONS = 6
-_DEFAULT_MAX_SUMMARY_SECTIONS = 32
+_DEFAULT_MAX_SECTION_SPAN_MS = 600_000
+_DEFAULT_MIN_SUMMARY_SECTIONS = 3
+_DEFAULT_MAX_SUMMARY_SECTIONS = 16
 
 
 def _format_segment(segment: TranscriptSegment, *, snippet_length: int) -> str:
@@ -65,7 +65,7 @@ def build_summary_prompt(
     meeting_duration_minutes = meeting_duration_ms / 60000
 
     target_sections = (
-        round(meeting_duration_minutes / 3)
+        round(meeting_duration_minutes / 7)
         if meeting_duration_minutes > 0
         else _DEFAULT_MIN_SUMMARY_SECTIONS
     )
@@ -77,8 +77,9 @@ def build_summary_prompt(
     pacing_instruction = (
         f" This meeting lasts approximately {meeting_duration_minutes:.1f} minutes."
         f" Produce around {target_sections} summary sections, allowing a deviation of up to two sections if needed."
-        f" Each summary section must focus on a single discussion thread and the span between start_ms and end_ms"
+        f" Each summary section must focus on a coherent discussion topic or theme and the span between start_ms and end_ms"
         f" must not exceed {_DEFAULT_MAX_SECTION_SPAN_MS} milliseconds."
+        " Prefer fewer, more comprehensive sections over many short ones."
         " Include concrete facts, decisions, blockers, and owners."
     )
     if language_hint:
@@ -104,7 +105,21 @@ def build_summary_prompt(
         " `description`, and may include `owner`, `due_date`, `start_ms`, `end_ms`, and `priority`."
         " Start times and end times should align with the transcript context you are summarising."
         f"{pacing_instruction}"
-        " Respond strictly with valid JSON. Do not include any additional commentary."
+        "\n\n"
+        "CRITICAL — Summary detail level:\n"
+        "Each `summary` field MUST be a detailed paragraph of 3-5 sentences, NOT a single vague sentence.\n"
+        'A BAD summary: "下水処理場の運営権についての議論が行われた。"\n'
+        'A GOOD summary: "Yuichiro Iio氏は、下水処理場の運営権について、市が所有権を保持したまま'
+        "民間企業に20年間の運営権を委託する仕組みであると説明した。Ryosuke Yuba氏は、料金設定の"
+        "権限が市と民間のどちらにあるか質問し、Iio氏は市が上限を設定し民間が範囲内で決定する"
+        '二段階方式であると回答した。"\n'
+        "Rules:\n"
+        "- Attribute statements to specific speakers by name (or speaker label) whenever identifiable.\n"
+        "- Include concrete numbers, project names, technical terms, and proper nouns from the transcript.\n"
+        "- Describe what was discussed, what was decided, and what opinions were expressed.\n"
+        '- Do NOT write generic one-liners like "〜について議論した" or "〜の説明があった".\n'
+        "\n"
+        "Respond strictly with valid JSON. Do not include any additional commentary."
         f"{language_instruction}\n\n"
         f"Job identifier: {job_id}\n"
         "Transcript snippets (timestamps in milliseconds):\n"

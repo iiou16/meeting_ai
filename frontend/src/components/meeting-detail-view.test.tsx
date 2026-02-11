@@ -96,4 +96,15 @@ describe("MeetingDetailView", () => {
     ).toBeInTheDocument();
     expect(englishButton).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("renders transcript with inline timestamps and speaker label", async () => {
+    render(<MeetingDetailView jobId="job-777" initialLanguage="ja" />);
+    await waitFor(() =>
+      expect(screen.getByText(/本日のアジェンダを確認します。/)).toBeInTheDocument(),
+    );
+    // インラインタイムスタンプ
+    expect(screen.getByText("[00:00]")).toBeInTheDocument();
+    // スピーカーラベル
+    expect(screen.getByText(/司会:/)).toBeInTheDocument();
+  });
 });
