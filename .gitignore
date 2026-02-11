@@ -12,7 +12,12 @@ __pycache__/
 # 環境設定ファイル
 .env
 
+# OS
+.DS_Store
+
 # tool configs
+.agents/
+.claude/
 .serena/
 .uv-cache/
 .playwright-mcp/
