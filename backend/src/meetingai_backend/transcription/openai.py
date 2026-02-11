@@ -147,7 +147,7 @@ def transcribe_audio_chunks(
     perform_request = request_fn or _call_openai_transcription_api
     results: list[ChunkTranscriptionResult] = []
 
-    for asset in chunk_assets:
+    for chunk_index, asset in enumerate(chunk_assets):
         if not asset.path.exists():
             raise FileNotFoundError(f"audio chunk file does not exist: {asset.path}")
 
@@ -157,6 +157,16 @@ def transcribe_audio_chunks(
         while attempt < config.max_attempts:
             attempt += 1
             rate_limiter.acquire()
+
+            logger.info(
+                "Transcribing chunk %d/%d (asset=%s, attempt=%d/%d)",
+                chunk_index + 1,
+                len(chunk_assets),
+                asset.asset_id,
+                attempt,
+                config.max_attempts,
+            )
+            request_start = time.monotonic()
 
             try:
                 payload = perform_request(
@@ -212,6 +222,15 @@ def transcribe_audio_chunks(
                     asset_id=asset.asset_id,
                     status_code=None,
                 ) from exc
+
+            elapsed = time.monotonic() - request_start
+            logger.info(
+                "Chunk %d/%d transcribed in %.1fs (asset=%s)",
+                chunk_index + 1,
+                len(chunk_assets),
+                elapsed,
+                asset.asset_id,
+            )
 
             text = _extract_transcript_text(payload, asset_id=asset.asset_id)
             detected_language = _extract_language(payload)
