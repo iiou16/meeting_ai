@@ -166,8 +166,8 @@ class TestIterCandidateSegmentsErrorCases:
         with pytest.raises(RuntimeError, match="did not contain segments"):
             list(_iter_candidate_segments(chunk))
 
-    def test_raises_when_segments_is_empty_list(self) -> None:
-        """segments が空リストの場合に RuntimeError を発生させる。"""
+    def test_empty_segments_list_yields_nothing(self) -> None:
+        """segments が空リストの場合はエラーにならず、何も yield しない。"""
         chunk = _make_chunk(
             asset_id="asset-empty-segments",
             start_ms=0,
@@ -176,8 +176,8 @@ class TestIterCandidateSegmentsErrorCases:
             language="ja",
             response={"segments": []},
         )
-        with pytest.raises(RuntimeError, match="did not contain segments"):
-            list(_iter_candidate_segments(chunk))
+        candidates = list(_iter_candidate_segments(chunk))
+        assert candidates == []
 
     def test_skips_segment_without_start(self) -> None:
         """start が欠落したセグメントはスキップされる。"""
@@ -225,3 +225,58 @@ class TestIterCandidateSegmentsErrorCases:
         # equal と reversed は end_ms <= start_ms なので除外される
         assert "equal" not in texts
         assert "reversed" not in texts
+
+
+def test_merge_skips_chunk_with_empty_segments() -> None:
+    """一部チャンクのセグメントが空でも、他のチャンクのセグメントでマージが成功する。"""
+    chunk_a = _make_chunk(
+        asset_id="asset-good",
+        start_ms=0,
+        end_ms=3_000,
+        text="good",
+        language="ja",
+        response={
+            "segments": [
+                {"start": 0.0, "end": 2.0, "text": "有効なセグメント"},
+            ]
+        },
+    )
+    chunk_b = _make_chunk(
+        asset_id="asset-empty",
+        start_ms=3_000,
+        end_ms=5_000,
+        text="empty",
+        language="ja",
+        response={"segments": []},
+    )
+
+    segments = merge_chunk_transcriptions(
+        job_id="job-partial", chunk_results=[chunk_a, chunk_b]
+    )
+    assert len(segments) == 1
+    assert segments[0].text == "有効なセグメント"
+
+
+def test_merge_raises_when_all_chunks_produce_no_segments() -> None:
+    """全チャンクのセグメントが空の場合は RuntimeError が発生する。"""
+    chunk_a = _make_chunk(
+        asset_id="asset-empty-1",
+        start_ms=0,
+        end_ms=3_000,
+        text="empty",
+        language="ja",
+        response={"segments": []},
+    )
+    chunk_b = _make_chunk(
+        asset_id="asset-empty-2",
+        start_ms=3_000,
+        end_ms=5_000,
+        text="empty",
+        language="ja",
+        response={"segments": []},
+    )
+
+    with pytest.raises(RuntimeError, match="zero transcript segments"):
+        merge_chunk_transcriptions(
+            job_id="job-all-empty", chunk_results=[chunk_a, chunk_b]
+        )

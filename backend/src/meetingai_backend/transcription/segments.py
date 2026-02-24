@@ -120,7 +120,13 @@ def merge_chunk_transcriptions(
             order += 1
 
     if not merged:
-        return merged
+        chunk_summary = ", ".join(
+            f"{c.asset_id}({c.start_ms}-{c.end_ms}ms)" for c in ordered_chunks
+        )
+        raise RuntimeError(
+            f"All {len(ordered_chunks)} chunk(s) produced zero transcript segments. "
+            f"Chunks: [{chunk_summary}]"
+        )
 
     # Backfill language if nothing was detected anywhere.
     if not global_language:
@@ -240,11 +246,12 @@ def _iter_candidate_segments(
         yielded = True
 
     if not yielded:
-        raise RuntimeError(
-            f"Transcription response for asset {chunk.asset_id} "
-            f"(chunk {chunk.start_ms}-{chunk.end_ms} ms) did not contain "
-            f"segments. The 'segments' array was empty or contained no "
-            f"valid entries."
+        logger.warning(
+            "Transcription response for asset %s (chunk %d-%d ms) "
+            "contained no valid segments; skipping chunk.",
+            chunk.asset_id,
+            chunk.start_ms,
+            chunk.end_ms,
         )
 
 

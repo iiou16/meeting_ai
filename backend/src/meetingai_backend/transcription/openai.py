@@ -147,6 +147,17 @@ class _RateLimiter:
 _RETRIABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
 
 
+def _safe_response_text(response: httpx.Response | None) -> str | None:
+    """Extract response body text, returning None on failure."""
+    if response is None:
+        return None
+    try:
+        return response.text
+    except (AttributeError, UnicodeDecodeError) as exc:
+        logger.warning("Could not read error response text: %s", exc)
+        return None
+
+
 def _transcribe_single_chunk(
     *,
     chunk_index: int,
@@ -185,13 +196,9 @@ def _transcribe_single_chunk(
                 prompt=prompt,
             )
         except httpx.HTTPStatusError as exc:
-            status = exc.response.status_code if exc.response is not None else None
-            error_text = None
-            if exc.response is not None:
-                try:
-                    error_text = exc.response.text
-                except (AttributeError, UnicodeDecodeError) as read_exc:
-                    logger.warning("Could not read error response text: %s", read_exc)
+            response = exc.response
+            status = response.status_code if response is not None else None
+            error_text = _safe_response_text(response)
             if status in _RETRIABLE_STATUS and attempt < config.max_attempts:
                 delay = _select_retry_delay(
                     attempt=attempt,
@@ -338,11 +345,6 @@ def _call_openai_transcription_api(
     if normalized_model.endswith("-diarize"):
         data["response_format"] = "diarized_json"
         data["chunking_strategy"] = json.dumps({"type": "server_vad"})
-    elif "gpt-4o-transcribe" in normalized_model:
-        # gpt-4o-transcribe supports verbose_json with segment granularity.
-        # Note: gpt-4o-transcribe-diarize rejects verbose_json (handled in the branch above).
-        data["response_format"] = "verbose_json"
-        data["timestamp_granularities[]"] = "segment"
     else:
         data["response_format"] = "verbose_json"
         data["timestamp_granularities[]"] = "segment"
