@@ -6,12 +6,13 @@ import logging
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from ..transcription.progress import TranscriptionProgress
+from pydantic import BaseModel, Field
 
 from ..job_state import (
     JOB_STAGE_CHUNKING,
@@ -25,6 +26,8 @@ from ..media.assets import load_media_assets
 from ..settings import Settings, get_settings
 from ..summarization import load_action_items, load_summary_items, load_summary_quality
 from ..transcription.segments import load_transcript_segments
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -81,6 +84,12 @@ class JobSummary(BaseModel):
     can_delete: bool = Field(
         False,
         description="Indicates whether the job artefacts can be safely deleted.",
+    )
+    sub_progress_completed: int | None = Field(
+        None, description="Sub-progress completed count within current stage."
+    )
+    sub_progress_total: int | None = Field(
+        None, description="Sub-progress total count within current stage."
     )
     failure: JobFailure | None = Field(
         default=None,
@@ -142,6 +151,21 @@ def _detect_stage(job_directory: Path) -> tuple[int, str]:
     return 1, JOB_STAGE_UPLOAD
 
 
+def _compute_sub_progress(
+    record: TranscriptionProgress | None, stage_key: str
+) -> float:
+    """Return sub-progress within the current stage (0.0-1.0)."""
+    if stage_key != JOB_STAGE_TRANSCRIPTION:
+        return 0.0
+    if record is None:
+        return 0.0  # transcription タスクがまだ開始されていない
+    if record.chunks_total <= 0:
+        raise ValueError(
+            f"Invalid chunks_total={record.chunks_total} in progress record"
+        )
+    return record.chunks_completed / record.chunks_total
+
+
 def _determine_status(stage_index: int) -> JobStatus:
     if stage_index >= _STAGE_COUNT:
         return JobStatus.COMPLETED
@@ -158,7 +182,27 @@ def _build_failure_record(record: JobFailureRecord) -> JobFailure:
     )
 
 
+def _compute_progress(
+    stage_index: int,
+    stage_key: str,
+    progress_record: TranscriptionProgress | None,
+) -> float:
+    """Compute overall progress (0.0-1.0) with sub-stage interpolation.
+
+    The denominator is _STAGE_COUNT + 1 to reserve space for sub-stage
+    interpolation within each stage (e.g. transcription chunk progress).
+    This ensures progress smoothly approaches but never reaches 1.0 until
+    the job is fully completed.
+    """
+    if stage_index >= _STAGE_COUNT:
+        return 1.0
+    sub = _compute_sub_progress(progress_record, stage_key)
+    return (stage_index + sub) / (_STAGE_COUNT + 1)
+
+
 def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
+    from ..transcription.progress import load_transcription_progress
+
     segments = load_transcript_segments(job_directory)
     summary_items = load_summary_items(job_directory)
     action_items = load_action_items(job_directory)
@@ -195,15 +239,23 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         else:
             stage_index = _STAGE_INDEX[stage_key]
         status_value = JobStatus.FAILED
-        progress = stage_index / _STAGE_COUNT
+        progress_record = load_transcription_progress(job_directory)
+        progress = _compute_progress(stage_index, stage_key, progress_record)
         failure = _build_failure_record(failure_record)
         can_delete = False
     else:
         stage_index, stage_key = _detect_stage(job_directory)
         status_value = _determine_status(stage_index)
-        progress = stage_index / _STAGE_COUNT
+        progress_record = load_transcription_progress(job_directory)
+        progress = _compute_progress(stage_index, stage_key, progress_record)
         failure = None
         can_delete = stage_index >= _STAGE_COUNT
+
+    sub_completed: int | None = None
+    sub_total: int | None = None
+    if progress_record is not None and stage_key == JOB_STAGE_TRANSCRIPTION:
+        sub_completed = progress_record.chunks_completed
+        sub_total = progress_record.chunks_total
 
     return JobSummary(
         job_id=job_id,
@@ -219,6 +271,8 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         summary_count=len(summary_items),
         action_item_count=len(action_items),
         can_delete=can_delete,
+        sub_progress_completed=sub_completed,
+        sub_progress_total=sub_total,
         failure=failure,
     )
 

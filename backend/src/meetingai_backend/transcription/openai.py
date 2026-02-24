@@ -274,6 +274,7 @@ def transcribe_audio_chunks(
     prompt: str | None = None,
     request_fn: ChunkRequestFn | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    on_chunk_done: Callable[[int, int], None] | None = None,
 ) -> list[ChunkTranscriptionResult]:
     """Transcribe the provided audio chunks concurrently with retries and rate limiting."""
     if not chunk_assets:
@@ -319,6 +320,8 @@ def transcribe_audio_chunks(
                     pending.cancel()
                 break
             indexed_results[chunk_index] = result
+            if on_chunk_done is not None:
+                on_chunk_done(len(indexed_results), total_chunks)
 
     if first_error is not None:
         raise first_error

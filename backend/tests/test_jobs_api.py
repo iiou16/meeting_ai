@@ -117,14 +117,18 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
     assert completed["stage_key"] == "summary"
     assert completed["languages"] == ["ja"]
     assert completed["can_delete"] is True
+    assert completed["sub_progress_completed"] is None
+    assert completed["sub_progress_total"] is None
 
     pending = next(job for job in jobs if job["job_id"] == "job-pending")
     assert pending["status"] == "pending"
-    assert pending["progress"] == 0.25
+    assert pending["progress"] == 0.2
     assert pending["stage_index"] == 1
     assert pending["stage_count"] == 4
     assert pending["stage_key"] == "chunking"
     assert pending["can_delete"] is False
+    assert pending["sub_progress_completed"] is None
+    assert pending["sub_progress_total"] is None
 
     detail = client.get("/api/jobs/job-complete")
     assert detail.status_code == 200
@@ -157,6 +161,36 @@ def test_stage_info_transcribing(tmp_path: Path) -> None:
     assert job["stage_index"] == 2
     assert job["stage_count"] == 4
     assert job["stage_key"] == "transcription"
+
+    set_settings(None)
+
+
+def test_sub_progress_during_transcription(tmp_path: Path) -> None:
+    """Transcribing job with progress file should report sub_progress fields."""
+    from meetingai_backend.transcription.progress import ProgressTracker
+
+    job_dir = tmp_path / "job-sub"
+    job_dir.mkdir()
+    chunks_dir = job_dir / "audio_chunks"
+    chunks_dir.mkdir()
+    (chunks_dir / "chunk_000.mp3").write_bytes(b"\x00\x00")
+    (chunks_dir / "chunk_001.mp3").write_bytes(b"\x00\x00")
+
+    tracker = ProgressTracker(job_dir, chunks_total=9)
+    tracker.initialize()
+    tracker.update(5)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+
+    client = TestClient(create_app())
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    jobs = response.json()
+    job = next(j for j in jobs if j["job_id"] == "job-sub")
+    assert job["stage_key"] == "transcription"
+    assert job["sub_progress_completed"] == 5
+    assert job["sub_progress_total"] == 9
 
     set_settings(None)
 
@@ -197,7 +231,7 @@ def test_stage_info_summarizing(tmp_path: Path) -> None:
 
 
 def test_progress_audio_source_file(tmp_path: Path) -> None:
-    """A job directory with an audio source file (e.g. .mp3) should report progress=0.25."""
+    """A job directory with an audio source file (e.g. .mp3) should report progress=0.2."""
     job_dir = tmp_path / "job-audio"
     job_dir.mkdir()
     (job_dir / "recording.mp3").write_bytes(b"\x00\x00")
@@ -212,7 +246,7 @@ def test_progress_audio_source_file(tmp_path: Path) -> None:
     jobs = response.json()
     audio_job = next(job for job in jobs if job["job_id"] == "job-audio")
     assert audio_job["status"] == "pending"
-    assert audio_job["progress"] == 0.25
+    assert audio_job["progress"] == 0.2
 
     set_settings(None)
 

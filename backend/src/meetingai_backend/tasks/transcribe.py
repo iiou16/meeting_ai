@@ -13,6 +13,7 @@ from ..media import MediaAsset, load_media_assets
 from ..settings import Settings, get_settings
 from ..transcription import (
     OpenAITranscriptionConfig,
+    ProgressTracker,
     dump_transcript_segments,
     merge_chunk_transcriptions,
     transcribe_audio_chunks,
@@ -77,6 +78,9 @@ def transcribe_audio_for_job(
         if not chunk_assets:
             raise RuntimeError("no audio chunk assets found; cannot run transcription.")
 
+        tracker = ProgressTracker(job_path, chunks_total=len(chunk_assets))
+        tracker.initialize()
+
         chunk_results = transcribe_audio_chunks(
             chunk_assets,
             config=config,
@@ -84,6 +88,7 @@ def transcribe_audio_for_job(
             prompt=prompt,
             request_fn=request_fn,
             sleep=sleep_fn,
+            on_chunk_done=lambda completed, total: tracker.update(completed),
         )
 
         segments = merge_chunk_transcriptions(

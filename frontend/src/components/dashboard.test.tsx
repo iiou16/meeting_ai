@@ -74,7 +74,14 @@ describe("Dashboard component", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("完了")).toBeInTheDocument();
     expect(screen.getByText("4/4 · 要約生成")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByText("ジョブを削除")).toBeInTheDocument();
+
+    const progressBar = screen.getByRole("progressbar");
+    expect(progressBar).toBeInTheDocument();
+    expect(progressBar).toHaveAttribute("aria-valuenow", "100");
+    expect(progressBar).toHaveAttribute("aria-valuemin", "0");
+    expect(progressBar).toHaveAttribute("aria-valuemax", "100");
 
     const englishButton = screen.getByRole("button", { name: "English" });
     await userEvent.click(englishButton);
@@ -99,5 +106,57 @@ describe("Dashboard component", () => {
         (init?.method ?? "GET") === "DELETE"
       );
     })).toBe(true);
+  });
+
+  it("renders progress bar with partial progress", async () => {
+    const partialJobs = [
+      {
+        job_id: "job-partial",
+        status: "processing",
+        created_at: "2025-05-25T10:00:00Z",
+        updated_at: "2025-05-25T10:05:00Z",
+        progress: 0.467,
+        stage_index: 2,
+        stage_count: 4,
+        stage_key: "transcription",
+        duration_ms: null,
+        languages: [],
+        summary_count: 0,
+        action_item_count: 0,
+        can_delete: false,
+        sub_progress_completed: 5,
+        sub_progress_total: 9,
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockImplementation(
+      (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const method = init?.method ?? "GET";
+        if (url.includes("/api/jobs") && method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(partialJobs),
+          } as Response);
+        }
+        return Promise.reject(
+          new Error(`Unexpected fetch call ${method} ${url}`),
+        );
+      },
+    );
+
+    render(<Dashboard initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("job-partial")).toBeInTheDocument(),
+    );
+
+    const progressBar = screen.getByRole("progressbar");
+    expect(progressBar).toHaveAttribute("aria-valuenow", "47");
+    expect(screen.getByText("47%")).toBeInTheDocument();
+    expect(
+      screen.getByText("2/4 · 文字起こし生成（5/9）"),
+    ).toBeInTheDocument();
   });
 });
