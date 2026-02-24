@@ -38,7 +38,11 @@ function formatStageLabel(
   copy: ReturnType<typeof getCopy>,
 ): string {
   const label = copy.stageLabels[job.stage_key] ?? job.stage_key;
-  return `${job.stage_index}/${job.stage_count} · ${label}`;
+  const base = `${job.stage_index}/${job.stage_count} · ${label}`;
+  if (job.sub_progress_total != null && job.sub_progress_completed != null) {
+    return `${base}（${job.sub_progress_completed}/${job.sub_progress_total}）`;
+  }
+  return base;
 }
 
 function formatStatus(
@@ -341,7 +345,7 @@ export default function Dashboard({
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.status}
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold">
+                  <th className="w-48 px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.progress}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
@@ -410,8 +414,29 @@ export default function Dashboard({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-200">
-                        {formatStageLabel(job, copy)}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-2 flex-1 overflow-hidden rounded-full bg-slate-800"
+                              role="progressbar"
+                              aria-valuemin={0}
+                              aria-valuenow={Math.round(job.progress * 100)}
+                              aria-valuemax={100}
+                            >
+                              <div
+                                className="h-full rounded-full bg-blue-500 transition-all duration-700"
+                                style={{ width: `${Math.round(job.progress * 100)}%` }}
+                              />
+                            </div>
+                            <span className="w-10 text-right text-xs font-medium tabular-nums text-slate-300">
+                              {Math.round(job.progress * 100)}%
+                            </span>
+                          </div>
+                          <span className="text-xs text-slate-400">
+                            {formatStageLabel(job, copy)}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-200">
                         {formatDateTime(job.updated_at, language)}

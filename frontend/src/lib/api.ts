@@ -33,6 +33,8 @@ export interface JobSummary {
   languages: string[];
   summary_count: number;
   action_item_count: number;
+  sub_progress_completed?: number | null;
+  sub_progress_total?: number | null;
   failure?: JobFailure | null;
 }
 
