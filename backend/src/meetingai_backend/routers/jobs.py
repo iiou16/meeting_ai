@@ -142,13 +142,11 @@ def _detect_stage(job_directory: Path) -> tuple[int, str]:
     return 1, JOB_STAGE_UPLOAD
 
 
-def _determine_status(stage_index: int, job_directory: Path) -> JobStatus:
+def _determine_status(stage_index: int) -> JobStatus:
     if stage_index >= _STAGE_COUNT:
         return JobStatus.COMPLETED
     if stage_index >= 2:
         return JobStatus.PROCESSING
-    if any(job_directory.glob("*")):
-        return JobStatus.PENDING
     return JobStatus.PENDING
 
 
@@ -202,7 +200,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         can_delete = False
     else:
         stage_index, stage_key = _detect_stage(job_directory)
-        status_value = _determine_status(stage_index, job_directory)
+        status_value = _determine_status(stage_index)
         progress = stage_index / _STAGE_COUNT
         failure = None
         can_delete = stage_index >= _STAGE_COUNT

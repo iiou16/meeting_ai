@@ -74,18 +74,16 @@ def _on_job_failure(job: Job, typ: type, value: BaseException, tb: Any) -> None:
             error=existing.message,
             details={**existing.details, **failure_details},
         )
-        logger.error("Job %s failed: %s", job_id, value)
-        return
+    else:
+        # タスク側で失敗記録が書かれなかった場合、ジョブ関数名からステージを推定する。
+        stage = _infer_stage_from_job(job)
+        mark_job_failed(
+            job_directory,
+            stage=stage,
+            error=str(value),
+            details=failure_details,
+        )
 
-    # タスク側で失敗記録が書かれなかった場合、ジョブ関数名からステージを推定する。
-    stage = _infer_stage_from_job(job)
-
-    mark_job_failed(
-        job_directory,
-        stage=stage,
-        error=str(value),
-        details=failure_details,
-    )
     logger.error("Job %s failed: %s", job_id, value)
 
 
