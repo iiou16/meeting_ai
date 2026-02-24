@@ -24,7 +24,7 @@ def test_delete_meeting_removes_directory(tmp_path: Path) -> None:
     job_dir.mkdir()
     (job_dir / "file.txt").write_text("hello", encoding="utf-8")
     (job_dir / "audio_chunks").mkdir()
-    (job_dir / "audio_chunks" / "chunk.wav").write_bytes(b"data")
+    (job_dir / "audio_chunks" / "chunk.mp3").write_bytes(b"data")
 
     settings = _make_settings(tmp_path)
     set_settings(settings)

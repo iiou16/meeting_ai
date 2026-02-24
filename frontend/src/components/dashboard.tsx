@@ -12,7 +12,7 @@ import {
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
 
-const MAX_FILE_SIZE_MB = 500;
+const MAX_FILE_SIZE_MB = 1024;
 const REFRESH_INTERVAL_MS = 10000;
 
 type UploadState = "idle" | "uploading" | "success" | "error";

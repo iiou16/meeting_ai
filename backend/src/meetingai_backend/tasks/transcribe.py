@@ -39,6 +39,7 @@ def _build_transcription_config(settings: Settings) -> OpenAITranscriptionConfig
         max_retry_backoff_seconds=settings.openai_max_retry_backoff_seconds,
         requests_per_minute=settings.openai_requests_per_minute,
         user_agent=settings.openai_user_agent,
+        max_concurrent_requests=settings.openai_max_concurrent_requests,
     )
 
 

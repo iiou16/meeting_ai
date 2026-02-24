@@ -13,13 +13,8 @@ from ..job_state import (
     mark_job_failed,
 )
 from ..jobs import enqueue_transcription_job, get_job_queue
-from ..media import (
-    AudioExtractionConfig,
-    MediaAsset,
-    dump_media_assets,
-    extract_audio_to_wav,
-)
-from ..media.chunking import AudioChunkSpec, split_wav_into_chunks
+from ..media import AudioExtractionConfig, MediaAsset, dump_media_assets, extract_audio
+from ..media.chunking import AudioChunkSpec, split_audio_into_chunks
 from ..settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -71,13 +66,14 @@ def process_uploaded_video(*, job_id: str, source_path: str) -> dict[str, object
 
     try:
         config = AudioExtractionConfig(ffmpeg_path=settings.ffmpeg_path)
-        audio_path = extract_audio_to_wav(path, config=config)
+        audio_path = extract_audio(path, config=config)
 
-        chunk_specs: list[AudioChunkSpec] = split_wav_into_chunks(
+        chunk_specs: list[AudioChunkSpec] = split_audio_into_chunks(
             audio_path,
             job_id=job_id,
             parent_asset_id=None,
             output_dir=job_directory / "audio_chunks",
+            ffmpeg_path=settings.ffmpeg_path,
         )
 
         if not chunk_specs:

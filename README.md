@@ -63,29 +63,36 @@ redis-cli ping  # PONG が返れば正常
 OPENAI_API_KEY=sk-...
 ```
 
-## バックエンドのセットアップ例
+## セットアップ・起動
+
+起動スクリプトが依存パッケージのインストールからサーバー起動まで一括で行うため、手動セットアップは不要です。
+
+### バックエンド
 
 ```bash
-cd backend
-UV_CACHE_DIR=../.uv-cache uv sync
-source .venv/bin/activate
+./scripts/start-backend.sh
 ```
 
-バックエンド（API + ワーカー）をまとめて起動するには `backend/dev.sh` を利用できます。
+以下を順に実行します:
+
+1. `.env` の読み込み
+2. `uv sync` による Python パッケージインストール
+3. Redis の自動検出・起動（稼働中の Redis → Docker コンテナ → `redis-server` の順で試行）
+4. RQ Worker のバックグラウンド起動
+5. API サーバー起動（`http://127.0.0.1:8000`、ホットリロード有効）
+
+Ctrl+C で終了すると Worker・redis-server（スクリプトが起動した場合）も自動停止します。
+
+### フロントエンド
 
 ```bash
-cd backend
-./dev.sh
+./scripts/start-frontend.sh
 ```
 
-詳細な実装内容や起動・テスト方法は `backend/README.md` を参照してください。
+以下を順に実行します:
 
-## フロントエンドのセットアップ例
-
-```bash
-cd frontend
-npm_config_cache=../.npm-cache npm install
-```
+1. `npm install` による依存パッケージインストール
+2. Next.js 開発サーバー起動（`http://localhost:3000`）
 
 ## ドキュメント
 

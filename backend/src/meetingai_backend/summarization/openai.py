@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol, Sequence
@@ -16,6 +17,8 @@ from .models import ActionItem, SummaryBundle, SummaryItem, SummaryQualityMetric
 from .prompt import build_summary_prompt
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS: int = 4096
 
 
 @dataclass(slots=True)
@@ -30,7 +33,7 @@ class OpenAISummarizationConfig:
     retry_backoff_seconds: float = 2.0
     max_retry_backoff_seconds: float | None = 60.0
     temperature: float = 0.2
-    max_output_tokens: int = 1200
+    max_output_tokens: int = DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS
     requests_per_minute: int | None = None
     user_agent: str | None = "MeetingAI/0.1"
 
@@ -234,6 +237,13 @@ def _call_openai_summary_api(
     if not isinstance(data, Mapping):
         raise SummarizationError("Unexpected response payload from OpenAI.")
 
+    finish_reason = _extract_finish_reason(data)
+    if finish_reason == "length":
+        raise SummarizationError(
+            "Summarization response was truncated due to max_tokens limit. "
+            f"Current max_output_tokens={config.max_output_tokens}."
+        )
+
     content = _extract_message_content(data)
     summary_payload = _decode_summary_json(content)
     summary_payload["_metadata"] = {
@@ -242,6 +252,13 @@ def _call_openai_summary_api(
         "usage": data.get("usage"),
     }
     return summary_payload
+
+
+def _extract_finish_reason(payload: Mapping[str, Any]) -> str | None:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+    return choices[0].get("finish_reason")
 
 
 def _extract_message_content(payload: Mapping[str, Any]) -> str:
@@ -265,11 +282,42 @@ def _extract_message_content(payload: Mapping[str, Any]) -> str:
     raise SummarizationError("OpenAI response missing textual content.")
 
 
+def _sanitize_json_string(raw: str) -> str:
+    """Remove common JSON syntax issues produced by LLMs.
+
+    Handles:
+    - Trailing commas before ``}`` or ``]``
+    - Single-line ``//`` comments
+    - Block ``/* ... */`` comments
+    """
+    # Strip single-line comments (// ...) that are NOT inside strings.
+    # A simple heuristic: remove // comments only when they appear after
+    # the last quote on the line (i.e. outside a string value).
+    text = re.sub(r"(?m)//[^\n]*$", "", raw)
+    # Strip block comments.
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    # Remove trailing commas before closing braces/brackets.
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    return text
+
+
 def _decode_summary_json(content: str) -> dict[str, Any]:
     try:
         decoded = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise SummarizationError("Model returned invalid JSON content.") from exc
+    except json.JSONDecodeError:
+        sanitized = _sanitize_json_string(content)
+        logger.warning(
+            "Raw JSON from model was invalid; retrying after sanitization "
+            "(original %d chars, sanitized %d chars)",
+            len(content),
+            len(sanitized),
+        )
+        try:
+            decoded = json.loads(sanitized)
+        except json.JSONDecodeError as exc:
+            raise SummarizationError(
+                f"Model returned invalid JSON content even after sanitization: {exc}"
+            ) from exc
 
     if not isinstance(decoded, dict):
         raise SummarizationError("Decoded summary payload must be a JSON object.")
@@ -506,10 +554,7 @@ def _evaluate_quality_metrics(
                 referenced_orders.add(segment.order)
 
     coverage_ratio = _calculate_coverage_ratio(coverage_ranges, total_duration)
-    if segments:
-        referenced_segments_ratio = len(referenced_orders) / len(segments)
-    else:
-        referenced_segments_ratio = 0.0
+    referenced_segments_ratio = len(referenced_orders) / len(segments)
 
     average_word_count = (
         sum(_word_count(item.summary_text) for item in summary_items)
@@ -557,7 +602,32 @@ def _spans_overlap(
 
 
 def _word_count(text: str) -> int:
-    return len([token for token in text.strip().split() if token])
+    """Return a word-count metric appropriate for the text's language.
+
+    For CJK-dominant text (Japanese, Chinese, Korean) where whitespace
+    tokenization is meaningless, return the character count instead.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return 0
+    cjk_chars = sum(1 for ch in stripped if _is_cjk(ch))
+    if len(stripped) > 0 and cjk_chars / len(stripped) >= 0.3:
+        return len(stripped)
+    return len(stripped.split())
+
+
+def _is_cjk(ch: str) -> bool:
+    """Return True if *ch* is a CJK ideograph or kana character."""
+    cp = ord(ch)
+    return (
+        0x4E00 <= cp <= 0x9FFF  # CJK Unified Ideographs
+        or 0x3400 <= cp <= 0x4DBF  # CJK Unified Ideographs Extension A
+        or 0x3040 <= cp <= 0x309F  # Hiragana
+        or 0x30A0 <= cp <= 0x30FF  # Katakana
+        or 0xAC00 <= cp <= 0xD7AF  # Hangul Syllables
+        or 0xF900 <= cp <= 0xFAFF  # CJK Compatibility Ideographs
+        or 0x20000 <= cp <= 0x2A6DF  # CJK Extension B
+    )
 
 
 def _coerce_milliseconds(value: Any) -> int | None:
@@ -618,9 +688,9 @@ def _select_retry_delay(
     response: httpx.Response | None,
 ) -> float:
     base_delay = config.retry_backoff_seconds * (2 ** (attempt - 1))
-    retry_after = None
-    if response is not None:
-        retry_after = _parse_retry_after_seconds(response.headers)
+    retry_after = (
+        _parse_retry_after_seconds(response.headers) if response is not None else None
+    )
     delay = base_delay
     if retry_after is not None:
         delay = max(delay, retry_after)
@@ -644,6 +714,7 @@ def _parse_retry_after_seconds(headers: Mapping[str, str]) -> float | None:
 
 
 __all__ = [
+    "DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS",
     "OpenAISummarizationConfig",
     "SummaryRequestFn",
     "SummarizationError",

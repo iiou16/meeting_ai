@@ -271,22 +271,21 @@ export function MeetingDetailView({
                     {copy.meetingEmptyTranscript}
                   </p>
                 ) : (
-                  <ul className="mt-4 space-y-3">
-                    {filteredSegments.map((segment) => (
-                      <li
-                        key={segment.segment_id}
-                        className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-sm text-slate-100"
-                      >
-                        <span className="font-mono text-xs text-blue-300">
-                          {formatTimestamp(segment.start_ms)}-
-                          {formatTimestamp(segment.end_ms)}
+                  <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-6 text-sm leading-relaxed text-slate-100">
+                    {filteredSegments.map((segment, index) => (
+                      <p key={segment.segment_id} className={index > 0 ? "mt-3" : ""}>
+                        <span className="mr-1 font-mono text-xs font-semibold text-blue-300">
+                          [{formatTimestamp(segment.start_ms)}]
                         </span>
-                        <p className="mt-2 whitespace-pre-wrap leading-relaxed">
-                          {segment.text}
-                        </p>
-                      </li>
+                        {segment.speaker_label && (
+                          <span className="mr-1 text-xs font-semibold text-emerald-300">
+                            {segment.speaker_label}:
+                          </span>
+                        )}
+                        <span className="whitespace-pre-wrap">{segment.text}</span>
+                      </p>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </section>
 

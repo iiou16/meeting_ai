@@ -26,12 +26,12 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == "ffmpeg-test"
-        destination = path.with_suffix(".wav")
+        destination = path.with_suffix(".mp3")
         destination.write_bytes(b"audio")
         return destination
 
     monkeypatch.setattr(
-        "meetingai_backend.tasks.ingest.extract_audio_to_wav",
+        "meetingai_backend.tasks.ingest.extract_audio",
         fake_extract_audio,
     )
 
@@ -51,9 +51,12 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
         chunk_duration_seconds: int = 900,
         parent_asset_id,
         output_dir: Path,
+        ffmpeg_path: str = "ffmpeg",
+        sample_rate: int = 16_000,
+        channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.wav"
+        chunk_path = output_dir / "chunk_0000.mp3"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -66,14 +69,14 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
             end_ms=480,
             sample_rate=16_000,
             channels=1,
-            bit_depth=16,
+            bit_depth=None,
             parent_asset_id=parent_asset_id,
             extra={},
         )
         return [AudioChunkSpec(asset=chunk_asset, path=chunk_path)]
 
     monkeypatch.setattr(
-        "meetingai_backend.tasks.ingest.split_wav_into_chunks",
+        "meetingai_backend.tasks.ingest.split_audio_into_chunks",
         fake_split,
     )
 
@@ -129,12 +132,12 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == "ffmpeg-test"
-        destination = path.with_suffix(".wav")
+        destination = path.parent / f"{path.stem}_audio.mp3"
         destination.write_bytes(b"audio")
         return destination
 
     monkeypatch.setattr(
-        "meetingai_backend.tasks.ingest.extract_audio_to_wav",
+        "meetingai_backend.tasks.ingest.extract_audio",
         fake_extract_audio,
     )
 
@@ -154,9 +157,12 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
         chunk_duration_seconds: int = 900,
         parent_asset_id,
         output_dir: Path,
+        ffmpeg_path: str = "ffmpeg",
+        sample_rate: int = 16_000,
+        channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.wav"
+        chunk_path = output_dir / "chunk_0000.mp3"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -169,14 +175,14 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
             end_ms=480,
             sample_rate=16_000,
             channels=1,
-            bit_depth=16,
+            bit_depth=None,
             parent_asset_id=parent_asset_id,
             extra={},
         )
         return [AudioChunkSpec(asset=chunk_asset, path=chunk_path)]
 
     monkeypatch.setattr(
-        "meetingai_backend.tasks.ingest.split_wav_into_chunks",
+        "meetingai_backend.tasks.ingest.split_audio_into_chunks",
         fake_split,
     )
 
@@ -204,12 +210,12 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
     video.write_bytes(b"binary-video")
 
     def fake_extract_audio(path: Path, *, config):
-        destination = path.with_suffix(".wav")
+        destination = path.with_suffix(".mp3")
         destination.write_bytes(b"audio")
         return destination
 
     monkeypatch.setattr(
-        "meetingai_backend.tasks.ingest.extract_audio_to_wav",
+        "meetingai_backend.tasks.ingest.extract_audio",
         fake_extract_audio,
     )
 
@@ -229,9 +235,12 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
         chunk_duration_seconds: int = 900,
         parent_asset_id,
         output_dir: Path,
+        ffmpeg_path: str = "ffmpeg",
+        sample_rate: int = 16_000,
+        channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.wav"
+        chunk_path = output_dir / "chunk_0000.mp3"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -244,14 +253,14 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
             end_ms=480,
             sample_rate=16_000,
             channels=1,
-            bit_depth=16,
+            bit_depth=None,
             parent_asset_id=parent_asset_id,
             extra={},
         )
         return [AudioChunkSpec(asset=chunk_asset, path=chunk_path)]
 
     monkeypatch.setattr(
-        "meetingai_backend.tasks.ingest.split_wav_into_chunks",
+        "meetingai_backend.tasks.ingest.split_audio_into_chunks",
         fake_split,
     )
 
