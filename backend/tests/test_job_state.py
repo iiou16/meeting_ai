@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from meetingai_backend.job_state import JobFailureRecord, load_job_failure
+from meetingai_backend.job_state import (
+    JobFailureRecord,
+    load_job_failure,
+    load_job_title,
+    save_job_title,
+)
 
 
 class TestJobFailureRecordFromDict:
@@ -90,3 +95,45 @@ class TestLoadJobFailureBackwardsCompat:
         record = load_job_failure(tmp_path)
         assert record is not None
         assert record.details == {"rq_job_id": "xyz"}
+
+
+class TestSaveAndLoadJobTitle:
+    """Tests for save_job_title / load_job_title."""
+
+    def test_save_and_load_round_trip(self, tmp_path: Path) -> None:
+        save_job_title(tmp_path, title="週次定例会議 2025-06-01")
+        result = load_job_title(tmp_path)
+        assert result == "週次定例会議 2025-06-01"
+
+    def test_load_returns_none_when_no_file(self, tmp_path: Path) -> None:
+        result = load_job_title(tmp_path)
+        assert result is None
+
+    def test_overwrite_existing_title(self, tmp_path: Path) -> None:
+        save_job_title(tmp_path, title="old")
+        save_job_title(tmp_path, title="new")
+        assert load_job_title(tmp_path) == "new"
+
+    def test_save_creates_parent_directories(self, tmp_path: Path) -> None:
+        nested = tmp_path / "a" / "b"
+        save_job_title(nested, title="deep")
+        assert load_job_title(nested) == "deep"
+
+    def test_load_raises_on_broken_json(self, tmp_path: Path) -> None:
+        (tmp_path / "job_title.json").write_text("not valid json", encoding="utf-8")
+        with pytest.raises(json.JSONDecodeError):
+            load_job_title(tmp_path)
+
+    def test_load_raises_on_missing_title_key(self, tmp_path: Path) -> None:
+        (tmp_path / "job_title.json").write_text(
+            json.dumps({"other": "data"}), encoding="utf-8"
+        )
+        with pytest.raises(KeyError):
+            load_job_title(tmp_path)
+
+    def test_load_raises_on_non_dict_payload(self, tmp_path: Path) -> None:
+        (tmp_path / "job_title.json").write_text(
+            json.dumps(["array"]), encoding="utf-8"
+        )
+        with pytest.raises(ValueError, match="Expected dict"):
+            load_job_title(tmp_path)

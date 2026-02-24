@@ -9,6 +9,7 @@ import {
   fetchJobs,
   uploadVideo,
   deleteJob,
+  updateJobTitle,
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
 
@@ -74,6 +75,9 @@ export default function Dashboard({
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [notificationType, setNotificationType] = useState<"success" | "error" | null>(null);
+  const [editingTitleJobId, setEditingTitleJobId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState<string>("");
+  const [savingTitleJobId, setSavingTitleJobId] = useState<string | null>(null);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -190,6 +194,55 @@ export default function Dashboard({
     } finally {
       setDeletingJobId(null);
     }
+  };
+
+  const handleTitleClick = (job: JobSummary) => {
+    setEditingTitleJobId(job.job_id);
+    setEditingTitleValue(job.title ?? "");
+  };
+
+  const handleTitleSave = async (jobId: string, value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setEditingTitleJobId(null);
+      return;
+    }
+
+    setSavingTitleJobId(jobId);
+    try {
+      await updateJobTitle(jobId, trimmed);
+      setNotification(copy.titleSaveSuccess);
+      setNotificationType("success");
+      await loadJobs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setNotification(copy.titleSaveError + message);
+      setNotificationType("error");
+    } finally {
+      setSavingTitleJobId(null);
+      setEditingTitleJobId(null);
+    }
+  };
+
+  const handleTitleKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    jobId: string,
+  ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const value = editingTitleValue;
+      setEditingTitleJobId(null);
+      handleTitleSave(jobId, value);
+    } else if (event.key === "Escape") {
+      setEditingTitleJobId(null);
+    }
+  };
+
+  const handleTitleBlur = (jobId: string) => {
+    if (editingTitleJobId !== jobId) return;
+    const value = editingTitleValue;
+    setEditingTitleJobId(null);
+    handleTitleSave(jobId, value);
   };
 
   const renderLastUpdated = () => {
@@ -343,6 +396,9 @@ export default function Dashboard({
                     {copy.jobsHeaders.jobId}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
+                    {copy.jobsHeaders.title}
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.status}
                   </th>
                   <th className="w-48 px-4 py-3 text-left font-semibold">
@@ -366,6 +422,39 @@ export default function Dashboard({
                     <tr key={job.job_id} className="hover:bg-slate-900/80">
                       <td className="px-4 py-3 font-mono text-slate-200">
                         {job.job_id}
+                      </td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {editingTitleJobId === job.job_id ? (
+                          <input
+                            type="text"
+                            value={editingTitleValue}
+                            onChange={(e) => setEditingTitleValue(e.target.value)}
+                            onKeyDown={(e) => handleTitleKeyDown(e, job.job_id)}
+                            onBlur={() => handleTitleBlur(job.job_id)}
+                            placeholder={copy.titlePlaceholder}
+                            disabled={savingTitleJobId === job.job_id}
+                            autoFocus
+                            className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            aria-label={copy.titleEditLabel}
+                            data-testid="title-input"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleTitleClick(job)}
+                            className="w-full cursor-pointer rounded px-2 py-1 text-left text-sm transition hover:bg-slate-800"
+                            title={copy.titleEditLabel}
+                            data-testid="title-display"
+                          >
+                            {job.title ? (
+                              <span>{job.title}</span>
+                            ) : (
+                              <span className="italic text-slate-500">
+                                {copy.titlePlaceholder}
+                              </span>
+                            )}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1">

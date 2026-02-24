@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 if TYPE_CHECKING:
     from ..transcription.progress import TranscriptionProgress
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..job_state import (
     JOB_STAGE_CHUNKING,
@@ -21,6 +21,8 @@ from ..job_state import (
     JOB_STAGE_UPLOAD,
     JobFailureRecord,
     load_job_failure,
+    load_job_title,
+    save_job_title,
 )
 from ..media.assets import load_media_assets
 from ..settings import Settings, get_settings
@@ -62,6 +64,7 @@ class JobSummary(BaseModel):
     """Short-form metadata for dashboards."""
 
     job_id: str = Field(..., description="Unique identifier of the job.")
+    title: str | None = Field(None, description="User-assigned title for the job.")
     status: JobStatus = Field(..., description="Current processing state.")
     created_at: datetime = Field(..., description="When the job directory was created.")
     updated_at: datetime = Field(..., description="Last modification timestamp.")
@@ -103,6 +106,22 @@ class JobDetail(JobSummary):
     quality_metrics: dict[str, Any] | None = Field(
         None, description="Optional quality metrics computed during summarisation."
     )
+
+
+class JobTitleUpdate(BaseModel):
+    """Request body for updating job title."""
+
+    title: str = Field(
+        ..., min_length=1, max_length=200, description="New title for the job."
+    )
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("title must not be blank")
+        return stripped
 
 
 def _iter_job_directories(settings: Settings) -> list[Path]:
@@ -226,6 +245,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
     created_at = _timestamp_from_stat(job_directory, use_ctime=True)
     updated_at = _timestamp_from_stat(job_directory, use_ctime=False)
     failure_record = load_job_failure(job_directory)
+    title = load_job_title(job_directory)
     if failure_record:
         stage_key = failure_record.stage
         if stage_key not in _STAGE_INDEX:
@@ -259,6 +279,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
 
     return JobSummary(
         job_id=job_id,
+        title=title,
         status=status_value,
         created_at=created_at,
         updated_at=updated_at,
@@ -306,4 +327,26 @@ def get_job(job_id: str, settings: Settings = Depends(get_settings)) -> JobDetai
     return _load_job_detail(job_id, job_directory)
 
 
-__all__ = ["router", "JobStatus", "JobSummary", "JobDetail", "JobFailure"]
+@router.patch("/{job_id}", response_model=JobDetail)
+def update_job_title(
+    job_id: str,
+    body: JobTitleUpdate,
+    settings: Settings = Depends(get_settings),
+) -> JobDetail:
+    """Update the user-assigned title for a job."""
+    job_directory = settings.upload_root / job_id
+    if not job_directory.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
+
+    save_job_title(job_directory, title=body.title)
+    return _load_job_detail(job_id, job_directory)
+
+
+__all__ = [
+    "router",
+    "JobStatus",
+    "JobSummary",
+    "JobDetail",
+    "JobFailure",
+    "JobTitleUpdate",
+]

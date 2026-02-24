@@ -1,9 +1,10 @@
-"""Helpers for tracking job-level failure state."""
+"""Helpers for tracking job-level state (failure markers, titles, etc.)."""
 
 from __future__ import annotations
 
 import json
 import logging
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ JOB_STAGE_TRANSCRIPTION = "transcription"
 JOB_STAGE_SUMMARY = "summary"
 
 _FAILURE_FILENAME = "job_failed.json"
+_TITLE_FILENAME = "job_title.json"
 
 
 @dataclass(slots=True)
@@ -113,6 +115,46 @@ def load_job_failure(job_directory: Path) -> JobFailureRecord | None:
     return JobFailureRecord.from_dict(payload)
 
 
+def save_job_title(job_directory: Path, *, title: str) -> Path:
+    """Persist a user-chosen title for the job (atomic write)."""
+    job_directory.mkdir(parents=True, exist_ok=True)
+    path = job_directory / _TITLE_FILENAME
+    content = json.dumps({"title": title}, ensure_ascii=False, indent=2)
+    fd = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=job_directory,
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        fd.write(content)
+        fd.flush()
+        fd.close()
+        Path(fd.name).replace(path)
+    except BaseException:
+        Path(fd.name).unlink(missing_ok=True)
+        raise
+    return path
+
+
+def load_job_title(job_directory: Path) -> str | None:
+    """Return the persisted title, or *None* if no title has been set."""
+    path = job_directory / _TITLE_FILENAME
+    if not path.exists():
+        return None
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.error("Failed to read job title at %s: %s", path, exc)
+        raise
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected dict in {path}, got {type(payload).__name__}")
+    return str(payload["title"])
+
+
 __all__ = [
     "JOB_STAGE_UPLOAD",
     "JOB_STAGE_CHUNKING",
@@ -121,5 +163,7 @@ __all__ = [
     "JobFailureRecord",
     "clear_job_failure",
     "load_job_failure",
+    "load_job_title",
     "mark_job_failed",
+    "save_job_title",
 ]

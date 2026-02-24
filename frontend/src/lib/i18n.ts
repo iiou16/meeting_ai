@@ -16,6 +16,7 @@ type BaseCopy = {
   jobsEmpty: string;
   jobsHeaders: {
     jobId: string;
+    title: string;
     status: string;
     progress: string;
     updatedAt: string;
@@ -48,6 +49,10 @@ type BaseCopy = {
   meetingExportButton: string;
   failedAtStage: (stage: string) => string;
   failureOccurredAt: (time: string) => string;
+  titlePlaceholder: string;
+  titleEditLabel: string;
+  titleSaveSuccess: string;
+  titleSaveError: string;
 };
 
 function jaCopy(): BaseCopy {
@@ -71,6 +76,7 @@ function jaCopy(): BaseCopy {
     jobsEmpty: "まだジョブがありません。ファイルをアップロードして開始しましょう。",
     jobsHeaders: {
       jobId: "ジョブID",
+      title: "タイトル",
       status: "ステータス",
       progress: "進捗",
       updatedAt: "最終更新",
@@ -122,6 +128,10 @@ function jaCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `${stage} で失敗しました`,
     failureOccurredAt: (time: string) => `発生日時: ${time}`,
+    titlePlaceholder: "タイトルを入力...",
+    titleEditLabel: "タイトルを編集",
+    titleSaveSuccess: "タイトルを保存しました。",
+    titleSaveError: "タイトルの保存に失敗しました: ",
   };
 }
 
@@ -147,6 +157,7 @@ function enCopy(): BaseCopy {
     jobsEmpty: "No jobs yet. Upload a recording to get started.",
     jobsHeaders: {
       jobId: "Job ID",
+      title: "Title",
       status: "Status",
       progress: "Progress",
       updatedAt: "Last Update",
@@ -198,6 +209,10 @@ function enCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `Failed at ${stage}`,
     failureOccurredAt: (time: string) => `Occurred at: ${time}`,
+    titlePlaceholder: "Enter title...",
+    titleEditLabel: "Edit title",
+    titleSaveSuccess: "Title saved successfully.",
+    titleSaveError: "Failed to save title: ",
   };
 }
 

@@ -6,6 +6,7 @@ import Dashboard from "./dashboard";
 const JOBS_FIXTURE = [
   {
     job_id: "job-123",
+    title: null,
     status: "completed",
     created_at: "2025-05-25T10:00:00Z",
     updated_at: "2025-05-25T11:00:00Z",
@@ -106,6 +107,91 @@ describe("Dashboard component", () => {
         (init?.method ?? "GET") === "DELETE"
       );
     })).toBe(true);
+  });
+
+  it("renders title column header and placeholder for null title", async () => {
+    render(<Dashboard initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("job-123")).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.getByRole("columnheader", { name: "タイトル" }),
+    ).toBeInTheDocument();
+
+    const titleDisplay = screen.getByTestId("title-display");
+    expect(titleDisplay).toBeInTheDocument();
+    expect(titleDisplay).toHaveTextContent("タイトルを入力...");
+  });
+
+  it("allows inline title editing with Enter key", async () => {
+    const user = userEvent.setup();
+
+    const jobsWithTitle = [
+      {
+        ...JOBS_FIXTURE[0],
+        title: "更新済みタイトル",
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockImplementation(
+      (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const method = init?.method ?? "GET";
+
+        if (url.includes("/api/jobs") && method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(jobsWithTitle),
+          } as Response);
+        }
+
+        if (url.includes("/api/jobs/") && method === "PATCH") {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                ...jobsWithTitle[0],
+                title: "新しいタイトル",
+              }),
+          } as Response);
+        }
+
+        return Promise.reject(
+          new Error(`Unexpected fetch call ${method} ${url}`),
+        );
+      },
+    );
+
+    render(<Dashboard initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("更新済みタイトル")).toBeInTheDocument(),
+    );
+
+    const titleDisplay = screen.getByTestId("title-display");
+    await user.click(titleDisplay);
+
+    const input = screen.getByTestId("title-input");
+    expect(input).toBeInTheDocument();
+
+    await user.clear(input);
+    await user.type(input, "新しいタイトル{Enter}");
+
+    await waitFor(() => {
+      expect(
+        (global.fetch as jest.Mock).mock.calls.some((call) => {
+          const [callUrl, callInit] = call;
+          return (
+            typeof callUrl === "string" &&
+            callUrl.includes("/api/jobs/") &&
+            (callInit?.method ?? "GET") === "PATCH"
+          );
+        }),
+      ).toBe(true);
+    });
   });
 
   it("renders progress bar with partial progress", async () => {

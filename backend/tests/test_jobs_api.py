@@ -291,3 +291,141 @@ def test_job_with_unknown_failure_stage(tmp_path: Path) -> None:
     assert detail["status"] == "failed"
 
     set_settings(None)
+
+
+# ---------- title field ----------
+
+
+def test_existing_jobs_have_null_title(tmp_path: Path) -> None:
+    """既存ジョブ（タイトル未設定）の title は null であること。"""
+    job_dir = tmp_path / "job-no-title"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    job = response.json()[0]
+    assert job["title"] is None
+
+    set_settings(None)
+
+
+# ---------- PATCH /api/jobs/{job_id} ----------
+
+
+def test_patch_job_title_success(tmp_path: Path) -> None:
+    """PATCH でタイトルを設定し、レスポンスと永続化を確認。"""
+    job_dir = tmp_path / "job-title"
+    _create_completed_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-title",
+        json={"title": "  週次定例会議  "},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "週次定例会議"
+    assert payload["job_id"] == "job-title"
+
+    # ディスクにも保存されていること
+    from meetingai_backend.job_state import load_job_title
+
+    assert load_job_title(job_dir) == "週次定例会議"
+
+    set_settings(None)
+
+
+def test_patch_job_title_not_found(tmp_path: Path) -> None:
+    """存在しないジョブへの PATCH は 404。"""
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/nonexistent",
+        json={"title": "test"},
+    )
+    assert response.status_code == 404
+
+    set_settings(None)
+
+
+def test_patch_job_title_empty_string(tmp_path: Path) -> None:
+    """空文字のタイトルは 422 バリデーションエラー。"""
+    job_dir = tmp_path / "job-empty"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-empty",
+        json={"title": ""},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_title_whitespace_only(tmp_path: Path) -> None:
+    """空白のみのタイトルは 422 バリデーションエラー。"""
+    job_dir = tmp_path / "job-ws"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-ws",
+        json={"title": "   "},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_title_too_long(tmp_path: Path) -> None:
+    """201文字超のタイトルは 422 バリデーションエラー。"""
+    job_dir = tmp_path / "job-long"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-long",
+        json={"title": "あ" * 201},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_title_boundary_200_chars(tmp_path: Path) -> None:
+    """ちょうど200文字のタイトルは成功。"""
+    job_dir = tmp_path / "job-200"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    title_200 = "a" * 200
+    response = client.patch(
+        "/api/jobs/job-200",
+        json={"title": title_200},
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == title_200
+
+    set_settings(None)
