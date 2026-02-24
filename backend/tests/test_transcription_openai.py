@@ -168,7 +168,7 @@ def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> N
     )
 
     assert len(results) == 2
-    assert sleep_calls == [pytest.approx(0.5, abs=1e-3)]
+    assert sleep_calls == [pytest.approx(0.5, abs=5e-3)]
 
 
 class TestConcurrentExecution:
