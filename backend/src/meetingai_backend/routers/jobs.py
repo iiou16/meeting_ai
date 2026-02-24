@@ -6,9 +6,12 @@ import logging
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
+if TYPE_CHECKING:
+    from ..transcription.progress import TranscriptionProgress
 from pydantic import BaseModel, Field
 
 from ..job_state import (
@@ -149,7 +152,7 @@ def _detect_stage(job_directory: Path) -> tuple[int, str]:
 
 
 def _compute_sub_progress(
-    record: "TranscriptionProgress | None", stage_key: str
+    record: TranscriptionProgress | None, stage_key: str
 ) -> float:
     """Return sub-progress within the current stage (0.0-1.0)."""
     if stage_key != JOB_STAGE_TRANSCRIPTION:
@@ -182,7 +185,7 @@ def _build_failure_record(record: JobFailureRecord) -> JobFailure:
 def _compute_progress(
     stage_index: int,
     stage_key: str,
-    progress_record: "TranscriptionProgress | None",
+    progress_record: TranscriptionProgress | None,
 ) -> float:
     """Compute overall progress (0.0-1.0) with sub-stage interpolation.
 

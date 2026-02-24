@@ -95,6 +95,11 @@ class ProgressTracker:
 
     def update(self, chunks_completed: int) -> None:
         """Update the progress file with the given completed count."""
+        if chunks_completed < 0 or chunks_completed > self._chunks_total:
+            raise ValueError(
+                f"chunks_completed must be between 0 and {self._chunks_total}, "
+                f"got {chunks_completed}"
+            )
         with self._lock:
             self._chunks_completed = chunks_completed
             now = datetime.now(timezone.utc)
@@ -109,7 +114,11 @@ class ProgressTracker:
     def _read_started_at(self) -> datetime:
         """Read started_at from the existing progress file."""
         payload = json.loads(self._path.read_text(encoding="utf-8"))
-        return datetime.fromisoformat(payload["started_at"])
+        try:
+            raw = payload["started_at"]
+        except KeyError:
+            raise KeyError(f"'started_at' not found in progress file {self._path}")
+        return datetime.fromisoformat(raw)
 
 
 def load_transcription_progress(
