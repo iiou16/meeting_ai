@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .summarization.openai import DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS
+
 _SETTINGS_CACHE: Settings | None = None
 
 
@@ -28,14 +30,14 @@ class Settings:
     openai_max_retry_backoff_seconds: float | None = 30.0
     openai_requests_per_minute: int | None = None
     openai_max_concurrent_requests: int = 5
-    openai_summary_model: str = "gpt-4o-mini"
+    openai_summary_model: str = "gpt-5"
     openai_summary_temperature: float = 0.2
-    openai_summary_request_timeout_seconds: float = 240.0
+    openai_summary_request_timeout_seconds: float = 600.0
     openai_summary_max_attempts: int = 3
     openai_summary_retry_backoff_seconds: float = 2.0
     openai_summary_max_retry_backoff_seconds: float | None = 60.0
     openai_summary_requests_per_minute: int | None = None
-    openai_summary_max_output_tokens: int = 1200
+    openai_summary_max_output_tokens: int = DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -126,9 +128,9 @@ class Settings:
                 "MEETINGAI_TRANSCRIBE_MAX_CONCURRENT must be an integer."
             ) from exc
 
-        summary_model = os.getenv("MEETINGAI_SUMMARY_MODEL", "gpt-4o-mini")
+        summary_model = os.getenv("MEETINGAI_SUMMARY_MODEL", "gpt-5")
         summary_temperature_raw = os.getenv("MEETINGAI_SUMMARY_TEMPERATURE", "0.2")
-        summary_timeout_raw = os.getenv("MEETINGAI_SUMMARY_TIMEOUT", "240")
+        summary_timeout_raw = os.getenv("MEETINGAI_SUMMARY_TIMEOUT", "600")
         summary_max_attempts_raw = os.getenv("MEETINGAI_SUMMARY_MAX_ATTEMPTS", "3")
         summary_backoff_raw = os.getenv("MEETINGAI_SUMMARY_BACKOFF_SECONDS", "2.0")
         summary_max_backoff_raw = os.getenv(
@@ -138,7 +140,8 @@ class Settings:
             "MEETINGAI_SUMMARY_REQUESTS_PER_MINUTE"
         )
         summary_max_tokens_raw = os.getenv(
-            "MEETINGAI_SUMMARY_MAX_OUTPUT_TOKENS", "1200"
+            "MEETINGAI_SUMMARY_MAX_OUTPUT_TOKENS",
+            str(DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS),
         )
 
         try:
