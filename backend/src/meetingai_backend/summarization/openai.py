@@ -18,7 +18,10 @@ from .prompt import build_summary_prompt
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS: int = 4096
+DEFAULT_SUMMARY_MAX_OUTPUT_TOKENS: int = 16384
+
+# Models that do not accept the ``temperature`` parameter (reasoning models).
+_REASONING_MODEL_PREFIXES = ("o1", "o3", "gpt-5")
 
 
 @dataclass(slots=True)
@@ -26,9 +29,9 @@ class OpenAISummarizationConfig:
     """Configuration for invoking the OpenAI chat completion API."""
 
     api_key: str
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-5"
     base_url: str = "https://api.openai.com/v1"
-    request_timeout_seconds: float = 180.0
+    request_timeout_seconds: float = 600.0
     max_attempts: int = 3
     retry_backoff_seconds: float = 2.0
     max_retry_backoff_seconds: float | None = 60.0
@@ -208,7 +211,9 @@ def _call_openai_summary_api(
     if config.user_agent:
         headers["User-Agent"] = config.user_agent
 
-    payload = {
+    is_reasoning = any(config.model.startswith(p) for p in _REASONING_MODEL_PREFIXES)
+
+    payload: dict[str, Any] = {
         "model": config.model,
         "messages": [
             {
@@ -220,10 +225,13 @@ def _call_openai_summary_api(
             },
             {"role": "user", "content": prompt},
         ],
-        "temperature": config.temperature,
         "response_format": {"type": "json_object"},
-        "max_tokens": config.max_output_tokens,
+        "max_completion_tokens": config.max_output_tokens,
     }
+
+    # Reasoning models (o1, o3, gpt-5) reject non-default temperature values.
+    if not is_reasoning:
+        payload["temperature"] = config.temperature
 
     response = httpx.post(
         url,
