@@ -62,11 +62,11 @@ class MediaAsset:
             duration_ms=payload["duration_ms"],
             start_ms=payload["start_ms"],
             end_ms=payload["end_ms"],
-            sample_rate=payload.get("sample_rate"),
-            channels=payload.get("channels"),
-            bit_depth=payload.get("bit_depth"),
-            parent_asset_id=payload.get("parent_asset_id"),
-            extra=payload.get("extra") or {},
+            sample_rate=payload["sample_rate"],
+            channels=payload["channels"],
+            bit_depth=payload["bit_depth"],
+            parent_asset_id=payload["parent_asset_id"],
+            extra=payload["extra"] or {},
         )
 
 
@@ -83,7 +83,7 @@ def load_media_assets(job_directory: Path) -> list[MediaAsset]:
     """Load media assets previously stored for the given job directory."""
     manifest_path = job_directory / "media_assets.json"
     if not manifest_path.exists():
-        return []
+        raise FileNotFoundError(f"Media asset manifest not found: {manifest_path}")
 
     raw_assets = json.loads(manifest_path.read_text(encoding="utf-8"))
     return [MediaAsset.from_dict(item) for item in raw_assets]

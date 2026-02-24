@@ -125,11 +125,11 @@ class TestMediaAssetFromDict:
         restored = MediaAsset.from_dict(d)
         assert restored.extra == {}
 
-    def test_from_dict_extra_missing_normalized_to_empty_dict(self) -> None:
+    def test_from_dict_extra_missing_raises(self) -> None:
         d = _make_asset().to_dict()
         del d["extra"]
-        restored = MediaAsset.from_dict(d)
-        assert restored.extra == {}
+        with pytest.raises(KeyError):
+            MediaAsset.from_dict(d)
 
 
 # ---------- TestMediaAssetCreateId ----------
@@ -179,9 +179,9 @@ class TestDumpAndLoadMediaAssets:
         assert loaded[1].asset_id == "a2"
         assert isinstance(loaded[0].path, Path)
 
-    def test_load_returns_empty_when_file_missing(self, tmp_path: Path) -> None:
-        result = load_media_assets(tmp_path)
-        assert result == []
+    def test_load_raises_when_file_missing(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_media_assets(tmp_path)
 
     def test_load_invalid_json_propagates_error(self, tmp_path: Path) -> None:
         manifest = tmp_path / "media_assets.json"
@@ -237,17 +237,14 @@ class TestDumpEmptyAssets:
 
 
 class TestFromDictOptionalFieldsMissing:
-    def test_from_dict_optional_fields_missing_default_to_none(self) -> None:
+    @pytest.mark.parametrize(
+        "field_name", ["sample_rate", "channels", "bit_depth", "parent_asset_id"]
+    )
+    def test_from_dict_optional_fields_missing_raises(self, field_name: str) -> None:
         d = _make_asset().to_dict()
-        del d["sample_rate"]
-        del d["channels"]
-        del d["bit_depth"]
-        del d["parent_asset_id"]
-        restored = MediaAsset.from_dict(d)
-        assert restored.sample_rate is None
-        assert restored.channels is None
-        assert restored.bit_depth is None
-        assert restored.parent_asset_id is None
+        del d[field_name]
+        with pytest.raises(KeyError):
+            MediaAsset.from_dict(d)
 
 
 class TestLoadNonArrayJson:
