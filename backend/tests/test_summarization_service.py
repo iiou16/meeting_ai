@@ -120,8 +120,7 @@ def test_generate_meeting_summary_parses_payload() -> None:
     assert len(bundle.action_items) == 1
     assert bundle.action_items[0].owner == "Alice"
     assert bundle.quality.action_item_count == 1
-    assert 0.0 <= bundle.quality.coverage_ratio <= 1.0
-    assert bundle.quality.llm_confidence == pytest.approx(0.92)
+    assert 0.0 <= bundle.quality.time_coverage_ratio <= 1.0
 
 
 def test_generate_meeting_summary_invalid_payload_raises() -> None:

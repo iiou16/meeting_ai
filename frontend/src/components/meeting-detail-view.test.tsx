@@ -75,7 +75,7 @@ const MEETING_FIXTURE = {
     },
   ],
   quality_metrics: {
-    coverage_ratio: 0.9,
+    time_coverage_ratio: 0.9,
   },
 };
 

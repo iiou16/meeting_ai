@@ -80,11 +80,10 @@ def _create_completed_job(job_dir: Path) -> None:
     dump_action_items(job_dir, action_items)
 
     quality = SummaryQualityMetrics(
-        coverage_ratio=0.95,
+        time_coverage_ratio=0.95,
         referenced_segments_ratio=1.0,
         average_summary_word_count=12.5,
         action_item_count=1,
-        llm_confidence=0.88,
     )
     dump_summary_quality(job_dir, quality)
 
@@ -137,7 +136,7 @@ def test_jobs_endpoints(tmp_path: Path) -> None:
     assert detail.status_code == 200
     payload = detail.json()
     assert payload["job_id"] == "job-complete"
-    assert payload["quality_metrics"]["coverage_ratio"] == 0.95
+    assert payload["quality_metrics"]["time_coverage_ratio"] == 0.95
 
     missing = client.get("/api/jobs/not-found")
     assert missing.status_code == 404

@@ -273,10 +273,12 @@ export function MeetingDetailView({
           )}
           {!isLoading && !error && data && (
             <div className="flex flex-col gap-8">
-              <section>
-                <h2 className="text-xl font-semibold">
-                  {copy.meetingSummaryHeading}
-                </h2>
+              <details className="group">
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden text-xl font-semibold flex items-center gap-2">
+                  <span className="transition-transform group-open:rotate-90">▶</span>
+                  <h2>{copy.meetingSummaryHeading}</h2>
+                  <span className="text-sm font-normal text-slate-400">({data.summary_items.length})</span>
+                </summary>
                 {data.summary_items.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-400">
                     {copy.meetingEmptySummary}
@@ -286,56 +288,64 @@ export function MeetingDetailView({
                     {data.summary_items.map((item) => (
                       <li
                         key={item.summary_id}
-                        className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4"
+                        className="rounded-2xl border border-slate-800 bg-slate-900/80"
                       >
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                          <span className="font-mono">
-                            {formatTimestamp(item.segment_start_ms)} -{" "}
-                            {formatTimestamp(item.segment_end_ms)}
-                          </span>
-                          {item.heading && (
-                            <span className="rounded-full bg-blue-500/20 px-2 py-1 font-semibold text-blue-200">
-                              {item.heading}
+                        <details className="group/item">
+                          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden p-4 flex items-center gap-2 text-xs text-slate-400">
+                            <span className="transition-transform group-open/item:rotate-90">▶</span>
+                            <span className="font-mono">
+                              {formatTimestamp(item.segment_start_ms)} -{" "}
+                              {formatTimestamp(item.segment_end_ms)}
                             </span>
-                          )}
-                          {item.priority && (
-                            <span className="rounded-full bg-amber-500/20 px-2 py-1 font-semibold text-amber-200">
-                              {item.priority}
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-2 text-sm text-slate-100">
-                          {item.summary_text}
-                        </p>
-                        {item.highlights.length > 0 && (
-                          <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                            {item.highlights.map((highlight) => (
-                              <li key={highlight}>• {highlight}</li>
-                            ))}
-                          </ul>
-                        )}
+                            {item.heading && (
+                              <span className="rounded-full bg-blue-500/20 px-2 py-1 font-semibold text-blue-200">
+                                {item.heading}
+                              </span>
+                            )}
+                            {item.priority && (
+                              <span className="rounded-full bg-amber-500/20 px-2 py-1 font-semibold text-amber-200">
+                                {item.priority}
+                              </span>
+                            )}
+                          </summary>
+                          <div className="px-4 pb-4">
+                            <p className="text-sm text-slate-100">
+                              {item.summary_text}
+                            </p>
+                            {item.highlights.length > 0 && (
+                              <ul className="mt-2 space-y-1 text-xs text-slate-300">
+                                {item.highlights.map((highlight) => (
+                                  <li key={highlight}>• {highlight}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </details>
                       </li>
                     ))}
                   </ul>
                 )}
-              </section>
+              </details>
 
-              <section>
-                <h2 className="text-xl font-semibold">
-                  {copy.meetingActionHeading}
-                </h2>
+              <details className="group">
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden text-xl font-semibold flex items-center gap-2">
+                  <span className="transition-transform group-open:rotate-90">▶</span>
+                  <h2>{copy.meetingActionHeading}</h2>
+                  <span className="text-sm font-normal text-slate-400">({data.action_items.length})</span>
+                </summary>
                 {data.action_items.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-400">
                     {copy.meetingEmptyAction}
                   </p>
                 ) : (
                   <ul className="mt-4 space-y-4">
-                    {data.action_items.map((item) => (
+                    {data.action_items.map((item, index) => (
                       <li
                         key={item.action_id}
                         className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4"
                       >
                         <p className="text-sm text-slate-100">
+                          <span className="font-semibold text-blue-300 mr-2">#{index + 1}</span>
                           {item.description}
                         </p>
                         <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
@@ -368,12 +378,14 @@ export function MeetingDetailView({
                     ))}
                   </ul>
                 )}
-              </section>
+              </details>
 
-              <section>
-                <h2 className="text-xl font-semibold">
-                  {copy.meetingTranscriptHeading}
-                </h2>
+              <details className="group">
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden text-xl font-semibold flex items-center gap-2">
+                  <span className="transition-transform group-open:rotate-90">▶</span>
+                  <h2>{copy.meetingTranscriptHeading}</h2>
+                  <span className="text-sm font-normal text-slate-400">({data.segments.length})</span>
+                </summary>
                 <div className="mt-3">
                   <label className="text-xs text-slate-300">
                     <span className="sr-only">Search transcript</span>
@@ -407,7 +419,7 @@ export function MeetingDetailView({
                     ))}
                   </div>
                 )}
-              </section>
+              </details>
 
               {data.quality_metrics && (
                 <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-sm text-slate-200">
