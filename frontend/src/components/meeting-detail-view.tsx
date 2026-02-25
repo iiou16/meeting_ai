@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  JobDetail,
   MeetingDetail,
+  fetchJob,
   fetchMeeting,
+  updateJobTitle,
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
 
@@ -42,9 +45,15 @@ export function MeetingDetailView({
   const copy = useMemo(() => getCopy(language), [language]);
 
   const [data, setData] = useState<MeetingDetail | null>(null);
+  const [jobDetail, setJobDetail] = useState<JobDetail | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingTitleValue, setEditingTitleValue] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
+  const [titleNotification, setTitleNotification] = useState<string | null>(null);
+  const [titleNotificationType, setTitleNotificationType] = useState<"success" | "error" | null>(null);
 
   useEffect(() => {
     setLanguage(initialLanguage);
@@ -55,10 +64,11 @@ export function MeetingDetailView({
     setIsLoading(true);
     setError(null);
 
-    fetchMeeting(jobId)
-      .then((detail) => {
+    Promise.all([fetchMeeting(jobId), fetchJob(jobId)])
+      .then(([meetingDetail, job]) => {
         if (!active) return;
-        setData(detail);
+        setData(meetingDetail);
+        setJobDetail(job);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -80,6 +90,52 @@ export function MeetingDetailView({
     () => filterSegments(data, filter),
     [data, filter],
   );
+
+  const handleTitleClick = () => {
+    setEditingTitle(true);
+    setEditingTitleValue(jobDetail?.title ?? "");
+  };
+
+  const handleTitleSave = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setEditingTitle(false);
+      return;
+    }
+
+    setSavingTitle(true);
+    try {
+      const updated = await updateJobTitle(jobId, trimmed);
+      setJobDetail(updated);
+      setTitleNotification(copy.titleSaveSuccess);
+      setTitleNotificationType("success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "unknown error";
+      setTitleNotification(copy.titleSaveError + message);
+      setTitleNotificationType("error");
+    } finally {
+      setSavingTitle(false);
+      setEditingTitle(false);
+    }
+  };
+
+  const handleTitleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const value = editingTitleValue;
+      setEditingTitle(false);
+      handleTitleSave(value);
+    } else if (event.key === "Escape") {
+      setEditingTitle(false);
+    }
+  };
+
+  const handleTitleBlur = () => {
+    if (!editingTitle) return;
+    const value = editingTitleValue;
+    setEditingTitle(false);
+    handleTitleSave(value);
+  };
 
   const handleExport = useCallback(() => {
     if (!data) return;
@@ -103,9 +159,50 @@ export function MeetingDetailView({
           <h1 className="text-3xl font-semibold sm:text-4xl">
             {copy.meetingTitlePrefix} · {jobId}
           </h1>
-          <p className="text-sm text-slate-300">
-            {copy.heroSubtitle}
-          </p>
+          <div className="mt-1">
+            {editingTitle ? (
+              <input
+                type="text"
+                value={editingTitleValue}
+                onChange={(e) => setEditingTitleValue(e.target.value)}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={handleTitleBlur}
+                placeholder={copy.titlePlaceholder}
+                disabled={savingTitle}
+                autoFocus
+                className="w-full max-w-md rounded border border-slate-600 bg-slate-950 px-3 py-1.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                aria-label={copy.titleEditLabel}
+                data-testid="detail-title-input"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={handleTitleClick}
+                className="cursor-pointer rounded px-3 py-1.5 text-left text-base transition hover:bg-slate-800"
+                title={copy.titleEditLabel}
+                data-testid="detail-title-display"
+              >
+                {jobDetail?.title ? (
+                  <span className="text-slate-200">{jobDetail.title}</span>
+                ) : (
+                  <span className="italic text-slate-500">
+                    {copy.titlePlaceholder}
+                  </span>
+                )}
+              </button>
+            )}
+            {titleNotification && (
+              <p
+                className={`mt-1 text-xs ${
+                  titleNotificationType === "success"
+                    ? "text-emerald-300"
+                    : "text-red-300"
+                }`}
+              >
+                {titleNotification}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {(["ja", "en"] as Language[]).map((option) => (

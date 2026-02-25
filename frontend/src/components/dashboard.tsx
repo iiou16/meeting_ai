@@ -9,6 +9,8 @@ import {
   fetchJobs,
   uploadVideo,
   deleteJob,
+  updateJobTitle,
+  updateJobRecordedAt,
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
 
@@ -74,6 +76,12 @@ export default function Dashboard({
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [notificationType, setNotificationType] = useState<"success" | "error" | null>(null);
+  const [editingTitleJobId, setEditingTitleJobId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState<string>("");
+  const [savingTitleJobId, setSavingTitleJobId] = useState<string | null>(null);
+  const [editingRecordedAtJobId, setEditingRecordedAtJobId] = useState<string | null>(null);
+  const [editingRecordedAtValue, setEditingRecordedAtValue] = useState<string>("");
+  const [savingRecordedAtJobId, setSavingRecordedAtJobId] = useState<string | null>(null);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -190,6 +198,113 @@ export default function Dashboard({
     } finally {
       setDeletingJobId(null);
     }
+  };
+
+  const handleTitleClick = (job: JobSummary) => {
+    setEditingRecordedAtJobId(null);
+    setEditingTitleJobId(job.job_id);
+    setEditingTitleValue(job.title ?? "");
+  };
+
+  const handleTitleSave = async (jobId: string, value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setEditingTitleJobId(null);
+      return;
+    }
+
+    setSavingTitleJobId(jobId);
+    try {
+      await updateJobTitle(jobId, trimmed);
+      setNotification(copy.titleSaveSuccess);
+      setNotificationType("success");
+      await loadJobs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setNotification(copy.titleSaveError + message);
+      setNotificationType("error");
+    } finally {
+      setSavingTitleJobId(null);
+      setEditingTitleJobId(null);
+    }
+  };
+
+  const handleTitleKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    jobId: string,
+  ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const value = editingTitleValue;
+      setEditingTitleJobId(null);
+      handleTitleSave(jobId, value);
+    } else if (event.key === "Escape") {
+      setEditingTitleJobId(null);
+    }
+  };
+
+  const handleTitleBlur = (jobId: string) => {
+    if (editingTitleJobId !== jobId) return;
+    const value = editingTitleValue;
+    setEditingTitleJobId(null);
+    handleTitleSave(jobId, value);
+  };
+
+  const handleRecordedAtClick = (job: JobSummary) => {
+    setEditingTitleJobId(null);
+    setEditingRecordedAtJobId(job.job_id);
+    if (job.recorded_at) {
+      const dt = new Date(job.recorded_at);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const local = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+      setEditingRecordedAtValue(local);
+    } else {
+      setEditingRecordedAtValue("");
+    }
+  };
+
+  const handleRecordedAtSave = async (jobId: string, value: string) => {
+    if (!value) {
+      setEditingRecordedAtJobId(null);
+      return;
+    }
+
+    setSavingRecordedAtJobId(jobId);
+    try {
+      const isoValue = new Date(value).toISOString();
+      await updateJobRecordedAt(jobId, isoValue);
+      setNotification(copy.recordedAtSaveSuccess);
+      setNotificationType("success");
+      await loadJobs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setNotification(copy.recordedAtSaveError + message);
+      setNotificationType("error");
+    } finally {
+      setSavingRecordedAtJobId(null);
+      setEditingRecordedAtJobId(null);
+    }
+  };
+
+  const handleRecordedAtKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    jobId: string,
+  ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const value = editingRecordedAtValue;
+      setEditingRecordedAtJobId(null);
+      handleRecordedAtSave(jobId, value);
+    } else if (event.key === "Escape") {
+      setEditingRecordedAtJobId(null);
+    }
+  };
+
+  const handleRecordedAtBlur = (jobId: string) => {
+    if (editingRecordedAtJobId !== jobId) return;
+    const value = editingRecordedAtValue;
+    setEditingRecordedAtJobId(null);
+    handleRecordedAtSave(jobId, value);
   };
 
   const renderLastUpdated = () => {
@@ -339,11 +454,11 @@ export default function Dashboard({
             <table className="min-w-full divide-y divide-slate-800 text-sm">
               <thead className="bg-slate-900/80 uppercase tracking-wide text-slate-400">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.jobId}
+                  <th className="min-w-[14rem] px-4 py-3 text-left font-semibold">
+                    {copy.jobsHeaders.title}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.status}
+                    {copy.jobsHeaders.recordedAt}
                   </th>
                   <th className="w-48 px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.progress}
@@ -351,8 +466,11 @@ export default function Dashboard({
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.updatedAt}
                   </th>
+                  <th className="w-20 px-3 py-3 text-left font-semibold">
+                    {copy.jobsHeaders.status}
+                  </th>
                   <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.summary}
+                    {copy.jobsHeaders.jobId}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.actions}
@@ -364,55 +482,70 @@ export default function Dashboard({
                   const statusInfo = formatStatus(job.status, language);
                   return (
                     <tr key={job.job_id} className="hover:bg-slate-900/80">
-                      <td className="px-4 py-3 font-mono text-slate-200">
-                        {job.job_id}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          <span
-                            className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                              job.status === "failed"
-                                ? "bg-red-500/20 text-red-200"
-                                : "bg-slate-800 text-slate-200"
-                            }`}
+                      <td className="px-4 py-3 text-slate-200">
+                        {editingTitleJobId === job.job_id ? (
+                          <input
+                            type="text"
+                            value={editingTitleValue}
+                            onChange={(e) => setEditingTitleValue(e.target.value)}
+                            onKeyDown={(e) => handleTitleKeyDown(e, job.job_id)}
+                            onBlur={() => handleTitleBlur(job.job_id)}
+                            placeholder={copy.titlePlaceholder}
+                            disabled={savingTitleJobId === job.job_id}
+                            autoFocus
+                            className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            aria-label={copy.titleEditLabel}
+                            data-testid="title-input"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleTitleClick(job)}
+                            className="w-full cursor-pointer rounded px-2 py-1 text-left text-sm transition hover:bg-slate-800"
+                            title={copy.titleEditLabel}
+                            data-testid="title-display"
                           >
-                            {statusInfo.label}
-                          </span>
-                          {job.failure ? (
-                            <>
-                              <span
-                                className="text-xs text-red-300"
-                                data-testid="failure-stage"
-                              >
-                                {copy.failedAtStage(
-                                  copy.stageLabels[job.failure.stage] ??
-                                    job.failure.stage,
-                                )}
+                            {job.title ? (
+                              <span>{job.title}</span>
+                            ) : (
+                              <span className="italic text-slate-500">
+                                {copy.titlePlaceholder}
                               </span>
-                              <span
-                                className="line-clamp-2 text-xs text-red-400/80"
-                                data-testid="failure-message"
-                              >
-                                {job.failure.message}
+                            )}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {editingRecordedAtJobId === job.job_id ? (
+                          <input
+                            type="datetime-local"
+                            value={editingRecordedAtValue}
+                            onChange={(e) => setEditingRecordedAtValue(e.target.value)}
+                            onKeyDown={(e) => handleRecordedAtKeyDown(e, job.job_id)}
+                            onBlur={() => handleRecordedAtBlur(job.job_id)}
+                            disabled={savingRecordedAtJobId === job.job_id}
+                            autoFocus
+                            className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            aria-label={copy.recordedAtEditLabel}
+                            data-testid="recorded-at-input"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRecordedAtClick(job)}
+                            className="w-full cursor-pointer rounded px-2 py-1 text-left text-sm transition hover:bg-slate-800"
+                            title={copy.recordedAtEditLabel}
+                            data-testid="recorded-at-display"
+                          >
+                            {job.recorded_at ? (
+                              <span>{formatDateTime(job.recorded_at, language)}</span>
+                            ) : (
+                              <span className="italic text-slate-500">
+                                {copy.recordedAtPlaceholder}
                               </span>
-                              <span
-                                className="text-xs text-slate-500"
-                                data-testid="failure-time"
-                              >
-                                {copy.failureOccurredAt(
-                                  formatDateTime(
-                                    job.failure.occurred_at,
-                                    language,
-                                  ),
-                                )}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-slate-400">
-                              {statusInfo.description}
-                            </span>
-                          )}
-                        </div>
+                            )}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1.5">
@@ -441,8 +574,44 @@ export default function Dashboard({
                       <td className="px-4 py-3 text-slate-200">
                         {formatDateTime(job.updated_at, language)}
                       </td>
-                      <td className="px-4 py-3 text-slate-200">
-                        {job.summary_count} / {job.action_item_count}
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
+                              job.status === "failed"
+                                ? "bg-red-500/20 text-red-200"
+                                : "bg-slate-800 text-slate-200"
+                            }`}
+                          >
+                            {statusInfo.label}
+                          </span>
+                          {job.failure ? (
+                            <>
+                              <span
+                                className="text-xs text-red-300"
+                                data-testid="failure-stage"
+                              >
+                                {copy.failedAtStage(
+                                  copy.stageLabels[job.failure.stage] ??
+                                    job.failure.stage,
+                                )}
+                              </span>
+                              <span
+                                className="line-clamp-2 text-xs text-red-400/80"
+                                data-testid="failure-message"
+                              >
+                                {job.failure.message}
+                              </span>
+                            </>
+                          ) : job.status !== "completed" ? (
+                            <span className="text-xs text-slate-400">
+                              {statusInfo.description}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-200" title={job.job_id}>
+                        {job.job_id.length > 5 ? job.job_id.slice(0, 5) + "\u2026" : job.job_id}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
@@ -457,11 +626,23 @@ export default function Dashboard({
                               type="button"
                               onClick={() => handleDeleteJob(job.job_id)}
                               disabled={deletingJobId === job.job_id}
-                              className="rounded-lg border border-red-500 px-4 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                              className="rounded-lg border border-red-500 p-2 text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                              title={copy.deleteButton}
                             >
-                              {deletingJobId === job.job_id
-                                ? copy.deleteInProgress
-                                : copy.deleteButton}
+                              {deletingJobId === job.job_id ? (
+                                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                              ) : (
+                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                                  <path d="M10 11v6" />
+                                  <path d="M14 11v6" />
+                                  <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+                                </svg>
+                              )}
                             </button>
                           )}
                         </div>

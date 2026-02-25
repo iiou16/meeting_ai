@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 if TYPE_CHECKING:
     from ..transcription.progress import TranscriptionProgress
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..job_state import (
     JOB_STAGE_CHUNKING,
@@ -21,6 +21,10 @@ from ..job_state import (
     JOB_STAGE_UPLOAD,
     JobFailureRecord,
     load_job_failure,
+    load_job_title,
+    load_recorded_at,
+    save_job_title,
+    save_recorded_at,
 )
 from ..media.assets import load_media_assets
 from ..settings import Settings, get_settings
@@ -62,9 +66,14 @@ class JobSummary(BaseModel):
     """Short-form metadata for dashboards."""
 
     job_id: str = Field(..., description="Unique identifier of the job.")
+    title: str | None = Field(None, description="User-assigned title for the job.")
     status: JobStatus = Field(..., description="Current processing state.")
     created_at: datetime = Field(..., description="When the job directory was created.")
     updated_at: datetime = Field(..., description="Last modification timestamp.")
+    recorded_at: datetime | None = Field(
+        None,
+        description="When the meeting was recorded (from media file metadata).",
+    )
     progress: float = Field(
         ..., ge=0.0, le=1.0, description="Approximate completion ratio (0.0-1.0)."
     )
@@ -103,6 +112,35 @@ class JobDetail(JobSummary):
     quality_metrics: dict[str, Any] | None = Field(
         None, description="Optional quality metrics computed during summarisation."
     )
+
+
+class JobUpdate(BaseModel):
+    """Request body for updating job metadata (title and/or recorded_at)."""
+
+    title: str | None = Field(
+        None, min_length=1, max_length=200, description="New title for the job."
+    )
+    recorded_at: datetime | None = Field(
+        None, description="New recorded-at timestamp (ISO 8601)."
+    )
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("title must not be blank")
+        return stripped
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> JobUpdate:
+        if self.title is None and self.recorded_at is None:
+            raise ValueError(
+                "at least one of 'title' or 'recorded_at' must be provided"
+            )
+        return self
 
 
 def _iter_job_directories(settings: Settings) -> list[Path]:
@@ -226,6 +264,8 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
     created_at = _timestamp_from_stat(job_directory, use_ctime=True)
     updated_at = _timestamp_from_stat(job_directory, use_ctime=False)
     failure_record = load_job_failure(job_directory)
+    title = load_job_title(job_directory)
+    recorded_at = load_recorded_at(job_directory)
     if failure_record:
         stage_key = failure_record.stage
         if stage_key not in _STAGE_INDEX:
@@ -242,7 +282,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         progress_record = load_transcription_progress(job_directory)
         progress = _compute_progress(stage_index, stage_key, progress_record)
         failure = _build_failure_record(failure_record)
-        can_delete = False
+        can_delete = True
     else:
         stage_index, stage_key = _detect_stage(job_directory)
         status_value = _determine_status(stage_index)
@@ -259,9 +299,11 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
 
     return JobSummary(
         job_id=job_id,
+        title=title,
         status=status_value,
         created_at=created_at,
         updated_at=updated_at,
+        recorded_at=recorded_at,
         progress=round(progress, 3),
         stage_index=stage_index,
         stage_count=_STAGE_COUNT,
@@ -293,7 +335,12 @@ def list_jobs(settings: Settings = Depends(get_settings)) -> list[JobSummary]:
     for directory in _iter_job_directories(settings):
         job_id = directory.name
         jobs.append(_load_job_summary(job_id, directory))
-    return sorted(jobs, key=lambda item: item.updated_at, reverse=True)
+
+    with_recorded = [j for j in jobs if j.recorded_at is not None]
+    without_recorded = [j for j in jobs if j.recorded_at is None]
+    with_recorded.sort(key=lambda item: item.recorded_at, reverse=True)  # type: ignore[arg-type]
+    without_recorded.sort(key=lambda item: item.updated_at, reverse=True)
+    return with_recorded + without_recorded
 
 
 @router.get("/{job_id}", response_model=JobDetail)
@@ -306,4 +353,29 @@ def get_job(job_id: str, settings: Settings = Depends(get_settings)) -> JobDetai
     return _load_job_detail(job_id, job_directory)
 
 
-__all__ = ["router", "JobStatus", "JobSummary", "JobDetail", "JobFailure"]
+@router.patch("/{job_id}", response_model=JobDetail)
+def update_job(
+    job_id: str,
+    body: JobUpdate,
+    settings: Settings = Depends(get_settings),
+) -> JobDetail:
+    """Update the user-assigned title and/or recorded_at for a job."""
+    job_directory = settings.upload_root / job_id
+    if not job_directory.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
+
+    if body.title is not None:
+        save_job_title(job_directory, title=body.title)
+    if body.recorded_at is not None:
+        save_recorded_at(job_directory, recorded_at=body.recorded_at)
+    return _load_job_detail(job_id, job_directory)
+
+
+__all__ = [
+    "router",
+    "JobStatus",
+    "JobSummary",
+    "JobDetail",
+    "JobFailure",
+    "JobUpdate",
+]

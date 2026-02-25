@@ -135,10 +135,34 @@ def get_meeting(
     )
 
 
+def _is_deletable(job_directory: Path) -> bool:
+    """Return True if the job is completed or failed (safe to delete)."""
+    from ..job_state import load_job_failure
+
+    try:
+        if load_job_failure(job_directory) is not None:
+            return True
+    except Exception:
+        # job_failed.json が破損していても、ファイル自体が存在すれば
+        # 失敗ジョブとみなし削除を許可する
+        if (job_directory / "job_failed.json").exists():
+            return True
+        raise
+    if (job_directory / "summary_items.json").exists():
+        return True
+    return False
+
+
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_meeting(job_id: str, settings: Settings = Depends(get_settings)) -> Response:
     """Delete all artefacts for the specified job."""
     job_directory = _resolve_job_directory(settings, job_id)
+
+    if not _is_deletable(job_directory):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "only completed or failed jobs can be deleted",
+        )
 
     try:
         shutil.rmtree(job_directory)

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
 import pytest
 
-from meetingai_backend.job_state import load_job_failure
+from meetingai_backend.job_state import load_job_failure, load_recorded_at
 from meetingai_backend.media.assets import MediaAsset
 from meetingai_backend.media.chunking import AudioChunkSpec
 from meetingai_backend.settings import Settings, set_settings
 from meetingai_backend.tasks.ingest import process_uploaded_video
+
+_JST = timezone(timedelta(hours=9))
 
 
 @pytest.fixture(autouse=True)
@@ -18,6 +21,87 @@ def reset_settings() -> Iterator[None]:
     set_settings(None)
     yield
     set_settings(None)
+
+
+def _common_monkeypatches(monkeypatch, settings, *, creation_time=None):
+    """Apply standard monkeypatches for ingest tests.
+
+    Returns a dict that will be populated with enqueued job info.
+    """
+
+    def fake_extract_audio(path: Path, *, config):
+        assert config.ffmpeg_path == settings.ffmpeg_path
+        destination = path.with_suffix(".mp3")
+        destination.write_bytes(b"audio")
+        return destination
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.extract_audio",
+        fake_extract_audio,
+    )
+
+    def fake_split(
+        audio_path: Path,
+        *,
+        job_id: str,
+        chunk_duration_seconds: int = 900,
+        parent_asset_id,
+        output_dir: Path,
+        ffmpeg_path: str = "ffmpeg",
+        sample_rate: int = 16_000,
+        channels: int = 1,
+    ):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path.write_bytes(b"chunk-audio")
+        chunk_asset = MediaAsset(
+            asset_id="chunk-asset",
+            job_id=job_id,
+            kind="audio_chunk",
+            path=chunk_path.resolve(),
+            order=0,
+            duration_ms=480,
+            start_ms=0,
+            end_ms=480,
+            sample_rate=16_000,
+            channels=1,
+            bit_depth=None,
+            parent_asset_id=parent_asset_id,
+            extra={},
+        )
+        return [AudioChunkSpec(asset=chunk_asset, path=chunk_path)]
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.split_audio_into_chunks",
+        fake_split,
+    )
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_creation_time",
+        lambda _path, *, ffprobe_path: creation_time,
+    )
+
+    queued: dict[str, str] = {}
+
+    def fake_get_job_queue(settings_param):
+        return object()
+
+    def fake_enqueue_transcription_job(
+        *, queue, job_id, job_directory, language=None, prompt=None
+    ):
+        queued["job_id"] = job_id
+        queued["job_directory"] = job_directory
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_job_queue",
+        fake_get_job_queue,
+    )
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.enqueue_transcription_job",
+        fake_enqueue_transcription_job,
+    )
+
+    return queued
 
 
 def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
@@ -99,6 +183,11 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         "meetingai_backend.tasks.ingest.enqueue_transcription_job",
         fake_enqueue_transcription_job,
+    )
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_creation_time",
+        lambda _path, *, ffprobe_path: None,
     )
 
     result = process_uploaded_video(job_id="abc123", source_path=str(video))
@@ -184,6 +273,11 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         "meetingai_backend.tasks.ingest.split_audio_into_chunks",
         fake_split,
+    )
+
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_creation_time",
+        lambda _path, *, ffprobe_path: None,
     )
 
     result = process_uploaded_video(job_id="audio123", source_path=str(audio))
@@ -279,6 +373,11 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
         fake_enqueue_transcription_job,
     )
 
+    monkeypatch.setattr(
+        "meetingai_backend.tasks.ingest.get_creation_time",
+        lambda _path, *, ffprobe_path: None,
+    )
+
     with pytest.raises(RuntimeError, match="redis connection refused"):
         process_uploaded_video(job_id="abc123", source_path=str(video))
 
@@ -291,3 +390,48 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
 def test_process_uploaded_video_missing_source(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         process_uploaded_video(job_id="job", source_path=str(tmp_path / "missing.mp4"))
+
+
+def test_process_uploaded_video_saves_recorded_at(monkeypatch, tmp_path) -> None:
+    """When get_creation_time returns a datetime, job_recorded_at.json is created."""
+    video = tmp_path / "recording.mp4"
+    video.write_bytes(b"binary-video")
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg-test",
+    )
+    set_settings(settings)
+
+    creation_dt = datetime(2025, 1, 15, 19, 30, 0, tzinfo=_JST)
+    _common_monkeypatches(monkeypatch, settings, creation_time=creation_dt)
+
+    process_uploaded_video(job_id="job-rec", source_path=str(video))
+
+    recorded = load_recorded_at(tmp_path)
+    assert recorded == creation_dt
+
+
+def test_process_uploaded_video_no_recorded_at_when_none(monkeypatch, tmp_path) -> None:
+    """When get_creation_time returns None, no job_recorded_at.json is created."""
+    video = tmp_path / "recording.mp4"
+    video.write_bytes(b"binary-video")
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg-test",
+    )
+    set_settings(settings)
+
+    _common_monkeypatches(monkeypatch, settings, creation_time=None)
+
+    process_uploaded_video(job_id="job-norec", source_path=str(video))
+
+    assert load_recorded_at(tmp_path) is None
+    assert not (tmp_path / "job_recorded_at.json").exists()

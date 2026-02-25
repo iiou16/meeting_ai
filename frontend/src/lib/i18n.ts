@@ -16,10 +16,11 @@ type BaseCopy = {
   jobsEmpty: string;
   jobsHeaders: {
     jobId: string;
+    title: string;
     status: string;
     progress: string;
+    recordedAt: string;
     updatedAt: string;
-    summary: string;
     actions: string;
   };
   statusLabels: Record<string, string>;
@@ -48,6 +49,14 @@ type BaseCopy = {
   meetingExportButton: string;
   failedAtStage: (stage: string) => string;
   failureOccurredAt: (time: string) => string;
+  titlePlaceholder: string;
+  titleEditLabel: string;
+  titleSaveSuccess: string;
+  titleSaveError: string;
+  recordedAtEditLabel: string;
+  recordedAtPlaceholder: string;
+  recordedAtSaveSuccess: string;
+  recordedAtSaveError: string;
 };
 
 function jaCopy(): BaseCopy {
@@ -71,10 +80,11 @@ function jaCopy(): BaseCopy {
     jobsEmpty: "まだジョブがありません。ファイルをアップロードして開始しましょう。",
     jobsHeaders: {
       jobId: "ジョブID",
+      title: "タイトル",
       status: "ステータス",
       progress: "進捗",
+      recordedAt: "収録日時",
       updatedAt: "最終更新",
-      summary: "サマリー数 / アクション数",
       actions: "操作",
     },
     statusLabels: {
@@ -122,6 +132,14 @@ function jaCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `${stage} で失敗しました`,
     failureOccurredAt: (time: string) => `発生日時: ${time}`,
+    titlePlaceholder: "タイトルを入力...",
+    titleEditLabel: "タイトルを編集",
+    titleSaveSuccess: "タイトルを保存しました。",
+    titleSaveError: "タイトルの保存に失敗しました: ",
+    recordedAtEditLabel: "収録日時を編集",
+    recordedAtPlaceholder: "収録日時を設定...",
+    recordedAtSaveSuccess: "収録日時を保存しました。",
+    recordedAtSaveError: "収録日時の保存に失敗しました: ",
   };
 }
 
@@ -147,10 +165,11 @@ function enCopy(): BaseCopy {
     jobsEmpty: "No jobs yet. Upload a recording to get started.",
     jobsHeaders: {
       jobId: "Job ID",
+      title: "Title",
       status: "Status",
       progress: "Progress",
+      recordedAt: "Recorded At",
       updatedAt: "Last Update",
-      summary: "Summary / Actions",
       actions: "Actions",
     },
     statusLabels: {
@@ -198,6 +217,14 @@ function enCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `Failed at ${stage}`,
     failureOccurredAt: (time: string) => `Occurred at: ${time}`,
+    titlePlaceholder: "Enter title...",
+    titleEditLabel: "Edit title",
+    titleSaveSuccess: "Title saved successfully.",
+    titleSaveError: "Failed to save title: ",
+    recordedAtEditLabel: "Edit recorded date",
+    recordedAtPlaceholder: "Set recorded date...",
+    recordedAtSaveSuccess: "Recorded date saved successfully.",
+    recordedAtSaveError: "Failed to save recorded date: ",
   };
 }
 

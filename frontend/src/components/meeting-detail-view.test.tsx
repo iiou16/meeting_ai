@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { fetchMeeting } from "../lib/api";
+import { fetchMeeting, fetchJob, updateJobTitle } from "../lib/api";
 import { MeetingDetailView } from "./meeting-detail-view";
 
 jest.mock("../lib/api", () => {
@@ -9,11 +9,17 @@ jest.mock("../lib/api", () => {
   return {
     ...actual,
     fetchMeeting: jest.fn(),
+    fetchJob: jest.fn(),
+    updateJobTitle: jest.fn(),
   };
 });
 
 const mockedFetchMeeting = fetchMeeting as jest.MockedFunction<
   typeof fetchMeeting
+>;
+const mockedFetchJob = fetchJob as jest.MockedFunction<typeof fetchJob>;
+const mockedUpdateJobTitle = updateJobTitle as jest.MockedFunction<
+  typeof updateJobTitle
 >;
 
 const MEETING_FIXTURE = {
@@ -61,13 +67,32 @@ const MEETING_FIXTURE = {
   },
 };
 
+const JOB_DETAIL_FIXTURE = {
+  job_id: "job-777",
+  title: "テスト会議タイトル",
+  status: "completed" as const,
+  created_at: "2025-05-25T10:00:00Z",
+  updated_at: "2025-05-25T11:00:00Z",
+  progress: 1,
+  stage_index: 4,
+  stage_count: 4,
+  stage_key: "summary",
+  can_delete: true,
+  languages: ["ja"],
+  summary_count: 1,
+  action_item_count: 1,
+};
+
 describe("MeetingDetailView", () => {
   beforeEach(() => {
     mockedFetchMeeting.mockResolvedValue(MEETING_FIXTURE);
+    mockedFetchJob.mockResolvedValue(JOB_DETAIL_FIXTURE);
   });
 
   afterEach(() => {
     mockedFetchMeeting.mockReset();
+    mockedFetchJob.mockReset();
+    mockedUpdateJobTitle.mockReset();
   });
 
   it("renders meeting data and toggles language", async () => {
@@ -106,5 +131,63 @@ describe("MeetingDetailView", () => {
     expect(screen.getByText("[00:00]")).toBeInTheDocument();
     // スピーカーラベル
     expect(screen.getByText(/司会:/)).toBeInTheDocument();
+  });
+
+  it("displays job title in header", async () => {
+    render(<MeetingDetailView jobId="job-777" initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("detail-title-display")).toBeInTheDocument(),
+    );
+
+    expect(screen.getByTestId("detail-title-display")).toHaveTextContent(
+      "テスト会議タイトル",
+    );
+  });
+
+  it("displays placeholder when title is null", async () => {
+    mockedFetchJob.mockResolvedValue({
+      ...JOB_DETAIL_FIXTURE,
+      title: null,
+    });
+
+    render(<MeetingDetailView jobId="job-777" initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("detail-title-display")).toBeInTheDocument(),
+    );
+
+    expect(screen.getByTestId("detail-title-display")).toHaveTextContent(
+      "タイトルを入力...",
+    );
+  });
+
+  it("allows inline title editing via click and Enter", async () => {
+    const user = userEvent.setup();
+    mockedUpdateJobTitle.mockResolvedValue({
+      ...JOB_DETAIL_FIXTURE,
+      title: "新しいタイトル",
+    });
+
+    render(<MeetingDetailView jobId="job-777" initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("detail-title-display")).toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByTestId("detail-title-display"));
+
+    const input = screen.getByTestId("detail-title-input");
+    expect(input).toBeInTheDocument();
+
+    await user.clear(input);
+    await user.type(input, "新しいタイトル{Enter}");
+
+    await waitFor(() =>
+      expect(mockedUpdateJobTitle).toHaveBeenCalledWith(
+        "job-777",
+        "新しいタイトル",
+      ),
+    );
   });
 });

@@ -46,3 +46,10 @@ target-version = ["py311"]
 profile = "black"
 line_length = 88
 src_paths = ["src", "tests"]
+
+[dependency-groups]
+dev = [
+    "black>=26.1.0",
+    "isort>=7.0.0",
+    "ruff>=0.15.0",
+]

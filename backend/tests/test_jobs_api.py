@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from meetingai_backend.app import create_app
-from meetingai_backend.job_state import mark_job_failed
+from meetingai_backend.job_state import mark_job_failed, save_recorded_at
 from meetingai_backend.settings import Settings, set_settings
 from meetingai_backend.summarization import (
     ActionItem,
@@ -19,6 +20,8 @@ from meetingai_backend.transcription.segments import (
     TranscriptSegment,
     dump_transcript_segments,
 )
+
+_JST = timezone(timedelta(hours=9))
 
 
 def _make_settings(upload_root: Path) -> Settings:
@@ -283,11 +286,260 @@ def test_job_with_unknown_failure_stage(tmp_path: Path) -> None:
     assert bad_job["failure"]["message"] == "test error with unknown stage"
     # 未知のstageでもstage_keyは記録されたstage値がそのまま返ること
     assert bad_job["failure"]["stage"] == "rq_worker"
+    # 失敗ジョブは削除可能であること
+    assert bad_job["can_delete"] is True
 
     # 個別ジョブ詳細も同様に取得できること
     detail_response = client.get("/api/jobs/job-bad-stage")
     assert detail_response.status_code == 200
     detail = detail_response.json()
     assert detail["status"] == "failed"
+
+    set_settings(None)
+
+
+# ---------- title field ----------
+
+
+def test_existing_jobs_have_null_title(tmp_path: Path) -> None:
+    """既存ジョブ（タイトル未設定）の title は null であること。"""
+    job_dir = tmp_path / "job-no-title"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    job = response.json()[0]
+    assert job["title"] is None
+
+    set_settings(None)
+
+
+# ---------- PATCH /api/jobs/{job_id} ----------
+
+
+def test_patch_job_title_success(tmp_path: Path) -> None:
+    """PATCH でタイトルを設定し、レスポンスと永続化を確認。"""
+    job_dir = tmp_path / "job-title"
+    _create_completed_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-title",
+        json={"title": "  週次定例会議  "},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "週次定例会議"
+    assert payload["job_id"] == "job-title"
+
+    # ディスクにも保存されていること
+    from meetingai_backend.job_state import load_job_title
+
+    assert load_job_title(job_dir) == "週次定例会議"
+
+    set_settings(None)
+
+
+def test_patch_job_title_not_found(tmp_path: Path) -> None:
+    """存在しないジョブへの PATCH は 404。"""
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/nonexistent",
+        json={"title": "test"},
+    )
+    assert response.status_code == 404
+
+    set_settings(None)
+
+
+def test_patch_job_title_empty_string(tmp_path: Path) -> None:
+    """空文字のタイトルは 422 バリデーションエラー。"""
+    job_dir = tmp_path / "job-empty"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-empty",
+        json={"title": ""},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_title_whitespace_only(tmp_path: Path) -> None:
+    """空白のみのタイトルは 422 バリデーションエラー。"""
+    job_dir = tmp_path / "job-ws"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-ws",
+        json={"title": "   "},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_title_too_long(tmp_path: Path) -> None:
+    """201文字超のタイトルは 422 バリデーションエラー。"""
+    job_dir = tmp_path / "job-long"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-long",
+        json={"title": "あ" * 201},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_title_boundary_200_chars(tmp_path: Path) -> None:
+    """ちょうど200文字のタイトルは成功。"""
+    job_dir = tmp_path / "job-200"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    title_200 = "a" * 200
+    response = client.patch(
+        "/api/jobs/job-200",
+        json={"title": title_200},
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == title_200
+
+    set_settings(None)
+
+
+# ---------- recorded_at field ----------
+
+
+def test_job_without_recorded_at_returns_null(tmp_path: Path) -> None:
+    """recorded_at ファイルがないジョブは recorded_at=null を返す。"""
+    job_dir = tmp_path / "job-norec"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    job = response.json()[0]
+    assert job["recorded_at"] is None
+
+    set_settings(None)
+
+
+def test_job_with_recorded_at_returns_iso_string(tmp_path: Path) -> None:
+    """recorded_at が設定されたジョブは ISO 文字列で返される。"""
+    job_dir = tmp_path / "job-rec"
+    _create_pending_job(job_dir)
+
+    dt = datetime(2025, 1, 15, 19, 30, 0, tzinfo=_JST)
+    save_recorded_at(job_dir, recorded_at=dt)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    job = response.json()[0]
+    assert job["recorded_at"] is not None
+    parsed = datetime.fromisoformat(job["recorded_at"])
+    assert parsed == dt
+
+    set_settings(None)
+
+
+# ---------- PATCH /api/jobs/{job_id} with recorded_at ----------
+
+
+def test_patch_job_recorded_at_success(tmp_path: Path) -> None:
+    """PATCH で recorded_at を設定し、レスポンスと永続化を確認。"""
+    job_dir = tmp_path / "job-rec-patch"
+    _create_completed_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    dt = datetime(2025, 3, 10, 14, 30, 0, tzinfo=timezone.utc)
+    response = client.patch(
+        "/api/jobs/job-rec-patch",
+        json={"recorded_at": dt.isoformat()},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["recorded_at"] is not None
+    parsed = datetime.fromisoformat(payload["recorded_at"])
+    assert parsed == dt
+
+    # ディスクにも保存されていること
+    from meetingai_backend.job_state import load_recorded_at as _load_ra
+
+    assert _load_ra(job_dir) == dt
+
+    set_settings(None)
+
+
+def test_patch_job_empty_body_returns_422(tmp_path: Path) -> None:
+    """title も recorded_at も指定しない空ボディは 422。"""
+    job_dir = tmp_path / "job-empty-body"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-empty-body",
+        json={},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_invalid_recorded_at_returns_422(tmp_path: Path) -> None:
+    """不正な日時フォーマットは 422。"""
+    job_dir = tmp_path / "job-bad-date"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-bad-date",
+        json={"recorded_at": "not-a-date"},
+    )
+    assert response.status_code == 422
 
     set_settings(None)

@@ -21,6 +21,7 @@ export interface JobFailure {
 
 export interface JobSummary {
   job_id: string;
+  title?: string | null;
   status: JobStatus;
   created_at: string;
   updated_at: string;
@@ -28,6 +29,7 @@ export interface JobSummary {
   stage_index: number;
   stage_count: number;
   stage_key: string;
+  recorded_at?: string | null;
   can_delete: boolean;
   duration_ms?: number | null;
   languages: string[];
@@ -112,6 +114,34 @@ export async function deleteJob(jobId: string): Promise<void> {
     const text = await response.text();
     throw new Error(text || `Delete failed with status ${response.status}`);
   }
+}
+
+export async function updateJobTitle(
+  jobId: string,
+  title: string,
+): Promise<JobDetail> {
+  return requestJson<JobDetail>(
+    `${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    },
+  );
+}
+
+export async function updateJobRecordedAt(
+  jobId: string,
+  recordedAt: string,
+): Promise<JobDetail> {
+  return requestJson<JobDetail>(
+    `${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recorded_at: recordedAt }),
+    },
+  );
 }
 
 type UploadOptions = {

@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .assets import MediaAsset
+
+_JST = timezone(timedelta(hours=9))
 
 DEFAULT_CHUNK_DURATION_SECONDS = 15 * 60
 
@@ -20,7 +23,7 @@ class AudioChunkSpec:
     path: Path
 
 
-def _derive_ffprobe_path(ffmpeg_path: str) -> str:
+def derive_ffprobe_path(ffmpeg_path: str) -> str:
     """Derive the ffprobe binary path from the ffmpeg binary path.
 
     If ffmpeg_path is a bare command name (no directory component), return
@@ -68,6 +71,66 @@ def _get_duration_seconds(source: Path, *, ffprobe_path: str) -> float:
             f"ffprobe reported non-positive duration ({duration}) for {source}"
         )
     return duration
+
+
+def get_creation_time(source: Path, *, ffprobe_path: str) -> datetime | None:
+    """Extract the creation_time metadata from a media file using ffprobe.
+
+    Returns a timezone-aware datetime in JST (UTC+9), or None if the file
+    has no creation_time tag.  Raises RuntimeError when ffprobe itself fails.
+    """
+    command = [
+        ffprobe_path,
+        "-v",
+        "error",
+        "-show_entries",
+        "format_tags=creation_time:stream_tags=creation_time",
+        "-of",
+        "json",
+        str(source),
+    ]
+
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"ffprobe binary was not found at '{ffprobe_path}'. "
+            "Ensure FFmpeg is installed and the path is correct."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"ffprobe failed with exit code {exc.returncode}: {exc.stderr}"
+        ) from exc
+
+    payload = json.loads(result.stdout)
+
+    raw: str | None = None
+
+    # Try format-level tags first.
+    if "format" in payload:
+        format_section = payload["format"]
+        if "tags" in format_section:
+            tags = format_section["tags"]
+            if "creation_time" in tags:
+                raw = tags["creation_time"]
+
+    # Fall back to stream-level tags.
+    if raw is None and "streams" in payload:
+        for stream in payload["streams"]:
+            if "tags" in stream:
+                tags = stream["tags"]
+                if "creation_time" in tags:
+                    raw = tags["creation_time"]
+                    break
+
+    if raw is None:
+        return None
+
+    dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        # Naive datetime — treat as JST.
+        return dt.replace(tzinfo=_JST)
+    return dt.astimezone(_JST)
 
 
 def _cut_chunk(
@@ -132,7 +195,7 @@ def split_audio_into_chunks(
     destination_root = output_dir or (source.parent / "audio_chunks")
     destination_root.mkdir(parents=True, exist_ok=True)
 
-    ffprobe_path = _derive_ffprobe_path(ffmpeg_path)
+    ffprobe_path = derive_ffprobe_path(ffmpeg_path)
     total_duration = _get_duration_seconds(source, ffprobe_path=ffprobe_path)
 
     assets: list[AudioChunkSpec] = []
@@ -185,5 +248,7 @@ def split_audio_into_chunks(
 __all__ = [
     "AudioChunkSpec",
     "DEFAULT_CHUNK_DURATION_SECONDS",
+    "derive_ffprobe_path",
+    "get_creation_time",
     "split_audio_into_chunks",
 ]

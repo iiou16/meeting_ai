@@ -8,6 +8,7 @@ import {
   fetchMeeting,
   deleteJob,
   uploadVideo,
+  updateJobTitle,
 } from "./api";
 
 const API_BASE = "http://localhost:8000";
@@ -172,6 +173,51 @@ describe("deleteJob", () => {
 
     const result = await deleteJob("j1");
     expect(result).toBeUndefined();
+  });
+});
+
+// ---------- updateJobTitle ----------
+
+describe("updateJobTitle", () => {
+  it("sends PATCH to correct URL with JSON body", async () => {
+    const responsePayload = { job_id: "j1", title: "My Meeting" };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(responsePayload),
+    });
+
+    const result = await updateJobTitle("j1", "My Meeting");
+    expect(result).toEqual(responsePayload);
+
+    const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    const init = (global.fetch as jest.Mock).mock.calls[0][1];
+    expect(calledUrl).toBe(`${API_BASE}/api/jobs/j1`);
+    expect(init.method).toBe("PATCH");
+    expect(init.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(init.body)).toEqual({ title: "My Meeting" });
+  });
+
+  it("encodes jobId in URL", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ job_id: "a/b" }),
+    });
+
+    await updateJobTitle("a/b", "test");
+    const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(calledUrl).toBe(
+      `${API_BASE}/api/jobs/${encodeURIComponent("a/b")}`,
+    );
+  });
+
+  it("throws on non-ok response", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: () => Promise.resolve("Validation error"),
+    });
+
+    await expect(updateJobTitle("j1", "")).rejects.toThrow("Validation error");
   });
 });
 
