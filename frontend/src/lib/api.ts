@@ -29,6 +29,7 @@ export interface JobSummary {
   stage_index: number;
   stage_count: number;
   stage_key: string;
+  recorded_at?: string | null;
   can_delete: boolean;
   duration_ms?: number | null;
   languages: string[];

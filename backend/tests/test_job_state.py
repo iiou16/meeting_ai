@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -11,8 +12,12 @@ from meetingai_backend.job_state import (
     JobFailureRecord,
     load_job_failure,
     load_job_title,
+    load_recorded_at,
     save_job_title,
+    save_recorded_at,
 )
+
+_JST = timezone(timedelta(hours=9))
 
 
 class TestJobFailureRecordFromDict:
@@ -137,3 +142,51 @@ class TestSaveAndLoadJobTitle:
         )
         with pytest.raises(ValueError, match="Expected dict"):
             load_job_title(tmp_path)
+
+
+class TestSaveAndLoadRecordedAt:
+    """Tests for save_recorded_at / load_recorded_at."""
+
+    def test_save_and_load_round_trip(self, tmp_path: Path) -> None:
+        dt = datetime(2025, 1, 15, 19, 30, 0, tzinfo=_JST)
+        save_recorded_at(tmp_path, recorded_at=dt)
+        result = load_recorded_at(tmp_path)
+        assert result == dt
+
+    def test_load_returns_none_when_no_file(self, tmp_path: Path) -> None:
+        result = load_recorded_at(tmp_path)
+        assert result is None
+
+    def test_overwrite_existing(self, tmp_path: Path) -> None:
+        dt1 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=_JST)
+        dt2 = datetime(2025, 6, 1, 12, 0, 0, tzinfo=_JST)
+        save_recorded_at(tmp_path, recorded_at=dt1)
+        save_recorded_at(tmp_path, recorded_at=dt2)
+        assert load_recorded_at(tmp_path) == dt2
+
+    def test_save_creates_parent_directories(self, tmp_path: Path) -> None:
+        nested = tmp_path / "a" / "b"
+        dt = datetime(2025, 3, 20, 14, 0, 0, tzinfo=_JST)
+        save_recorded_at(nested, recorded_at=dt)
+        assert load_recorded_at(nested) == dt
+
+    def test_load_raises_on_broken_json(self, tmp_path: Path) -> None:
+        (tmp_path / "job_recorded_at.json").write_text(
+            "not valid json", encoding="utf-8"
+        )
+        with pytest.raises(json.JSONDecodeError):
+            load_recorded_at(tmp_path)
+
+    def test_load_raises_on_missing_key(self, tmp_path: Path) -> None:
+        (tmp_path / "job_recorded_at.json").write_text(
+            json.dumps({"other": "data"}), encoding="utf-8"
+        )
+        with pytest.raises(KeyError):
+            load_recorded_at(tmp_path)
+
+    def test_load_raises_on_non_dict_payload(self, tmp_path: Path) -> None:
+        (tmp_path / "job_recorded_at.json").write_text(
+            json.dumps(["array"]), encoding="utf-8"
+        )
+        with pytest.raises(ValueError, match="Expected dict"):
+            load_recorded_at(tmp_path)

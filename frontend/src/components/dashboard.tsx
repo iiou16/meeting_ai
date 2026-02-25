@@ -405,6 +405,9 @@ export default function Dashboard({
                     {copy.jobsHeaders.progress}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
+                    {copy.jobsHeaders.recordedAt}
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.updatedAt}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
@@ -526,6 +529,11 @@ export default function Dashboard({
                             {formatStageLabel(job, copy)}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {job.recorded_at
+                          ? formatDateTime(job.recorded_at, language)
+                          : "-"}
                       </td>
                       <td className="px-4 py-3 text-slate-200">
                         {formatDateTime(job.updated_at, language)}

@@ -19,6 +19,7 @@ JOB_STAGE_SUMMARY = "summary"
 
 _FAILURE_FILENAME = "job_failed.json"
 _TITLE_FILENAME = "job_title.json"
+_RECORDED_AT_FILENAME = "job_recorded_at.json"
 
 
 @dataclass(slots=True)
@@ -155,6 +156,53 @@ def load_job_title(job_directory: Path) -> str | None:
     return str(payload["title"])
 
 
+def save_recorded_at(job_directory: Path, *, recorded_at: datetime) -> Path:
+    """Persist the recording timestamp for the job (atomic write)."""
+    job_directory.mkdir(parents=True, exist_ok=True)
+    path = job_directory / _RECORDED_AT_FILENAME
+    content = json.dumps(
+        {"recorded_at": recorded_at.isoformat()}, ensure_ascii=False, indent=2
+    )
+    fd = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=job_directory,
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        fd.write(content)
+        fd.flush()
+        fd.close()
+        Path(fd.name).replace(path)
+    except BaseException:
+        Path(fd.name).unlink(missing_ok=True)
+        raise
+    return path
+
+
+def load_recorded_at(job_directory: Path) -> datetime | None:
+    """Return the persisted recording timestamp, or *None* if not set."""
+    path = job_directory / _RECORDED_AT_FILENAME
+    if not path.exists():
+        return None
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.error("Failed to read recorded_at at %s: %s", path, exc)
+        raise
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected dict in {path}, got {type(payload).__name__}")
+    recorded_at_raw = payload["recorded_at"]
+    if not isinstance(recorded_at_raw, str):
+        raise TypeError(
+            f"recorded_at must be a string, got {type(recorded_at_raw).__name__}"
+        )
+    return datetime.fromisoformat(recorded_at_raw)
+
+
 __all__ = [
     "JOB_STAGE_UPLOAD",
     "JOB_STAGE_CHUNKING",
@@ -164,6 +212,8 @@ __all__ = [
     "clear_job_failure",
     "load_job_failure",
     "load_job_title",
+    "load_recorded_at",
     "mark_job_failed",
     "save_job_title",
+    "save_recorded_at",
 ]

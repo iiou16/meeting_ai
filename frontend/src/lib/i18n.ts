@@ -19,6 +19,7 @@ type BaseCopy = {
     title: string;
     status: string;
     progress: string;
+    recordedAt: string;
     updatedAt: string;
     summary: string;
     actions: string;
@@ -79,6 +80,7 @@ function jaCopy(): BaseCopy {
       title: "タイトル",
       status: "ステータス",
       progress: "進捗",
+      recordedAt: "収録日時",
       updatedAt: "最終更新",
       summary: "サマリー数 / アクション数",
       actions: "操作",
@@ -160,6 +162,7 @@ function enCopy(): BaseCopy {
       title: "Title",
       status: "Status",
       progress: "Progress",
+      recordedAt: "Recorded At",
       updatedAt: "Last Update",
       summary: "Summary / Actions",
       actions: "Actions",

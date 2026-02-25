@@ -10,6 +10,7 @@ const JOBS_FIXTURE = [
     status: "completed",
     created_at: "2025-05-25T10:00:00Z",
     updated_at: "2025-05-25T11:00:00Z",
+    recorded_at: "2025-05-25T09:00:00+09:00",
     progress: 1,
     stage_index: 4,
     stage_count: 4,
@@ -73,6 +74,9 @@ describe("Dashboard component", () => {
     expect(
       screen.getByRole("columnheader", { name: "ジョブID" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "収録日時" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("完了")).toBeInTheDocument();
     expect(screen.getByText("4/4 · 要約生成")).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
@@ -89,6 +93,9 @@ describe("Dashboard component", () => {
 
     expect(
       screen.getByRole("columnheader", { name: "Job ID" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Recorded At" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Completed")).toBeInTheDocument();
     expect(screen.getByText("4/4 · Summary")).toBeInTheDocument();

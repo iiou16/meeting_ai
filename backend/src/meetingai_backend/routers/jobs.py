@@ -22,6 +22,7 @@ from ..job_state import (
     JobFailureRecord,
     load_job_failure,
     load_job_title,
+    load_recorded_at,
     save_job_title,
 )
 from ..media.assets import load_media_assets
@@ -68,6 +69,10 @@ class JobSummary(BaseModel):
     status: JobStatus = Field(..., description="Current processing state.")
     created_at: datetime = Field(..., description="When the job directory was created.")
     updated_at: datetime = Field(..., description="Last modification timestamp.")
+    recorded_at: datetime | None = Field(
+        None,
+        description="When the meeting was recorded (from media file metadata).",
+    )
     progress: float = Field(
         ..., ge=0.0, le=1.0, description="Approximate completion ratio (0.0-1.0)."
     )
@@ -246,6 +251,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
     updated_at = _timestamp_from_stat(job_directory, use_ctime=False)
     failure_record = load_job_failure(job_directory)
     title = load_job_title(job_directory)
+    recorded_at = load_recorded_at(job_directory)
     if failure_record:
         stage_key = failure_record.stage
         if stage_key not in _STAGE_INDEX:
@@ -283,6 +289,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         status=status_value,
         created_at=created_at,
         updated_at=updated_at,
+        recorded_at=recorded_at,
         progress=round(progress, 3),
         stage_index=stage_index,
         stage_count=_STAGE_COUNT,

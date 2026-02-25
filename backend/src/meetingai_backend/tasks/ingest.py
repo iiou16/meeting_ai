@@ -11,10 +11,16 @@ from ..job_state import (
     JOB_STAGE_UPLOAD,
     clear_job_failure,
     mark_job_failed,
+    save_recorded_at,
 )
 from ..jobs import enqueue_transcription_job, get_job_queue
 from ..media import AudioExtractionConfig, MediaAsset, dump_media_assets, extract_audio
-from ..media.chunking import AudioChunkSpec, split_audio_into_chunks
+from ..media.chunking import (
+    AudioChunkSpec,
+    derive_ffprobe_path,
+    get_creation_time,
+    split_audio_into_chunks,
+)
 from ..settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -63,6 +69,11 @@ def process_uploaded_video(*, job_id: str, source_path: str) -> dict[str, object
         raise error
 
     settings = get_settings()
+
+    ffprobe_path = derive_ffprobe_path(settings.ffmpeg_path)
+    creation_time = get_creation_time(path, ffprobe_path=ffprobe_path)
+    if creation_time is not None:
+        save_recorded_at(job_directory, recorded_at=creation_time)
 
     try:
         config = AudioExtractionConfig(ffmpeg_path=settings.ffmpeg_path)

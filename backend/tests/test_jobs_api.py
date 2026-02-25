@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from meetingai_backend.app import create_app
-from meetingai_backend.job_state import mark_job_failed
+from meetingai_backend.job_state import mark_job_failed, save_recorded_at
 from meetingai_backend.settings import Settings, set_settings
 from meetingai_backend.summarization import (
     ActionItem,
@@ -19,6 +20,8 @@ from meetingai_backend.transcription.segments import (
     TranscriptSegment,
     dump_transcript_segments,
 )
+
+_JST = timezone(timedelta(hours=9))
 
 
 def _make_settings(upload_root: Path) -> Settings:
@@ -427,5 +430,47 @@ def test_patch_job_title_boundary_200_chars(tmp_path: Path) -> None:
     )
     assert response.status_code == 200
     assert response.json()["title"] == title_200
+
+    set_settings(None)
+
+
+# ---------- recorded_at field ----------
+
+
+def test_job_without_recorded_at_returns_null(tmp_path: Path) -> None:
+    """recorded_at ファイルがないジョブは recorded_at=null を返す。"""
+    job_dir = tmp_path / "job-norec"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    job = response.json()[0]
+    assert job["recorded_at"] is None
+
+    set_settings(None)
+
+
+def test_job_with_recorded_at_returns_iso_string(tmp_path: Path) -> None:
+    """recorded_at が設定されたジョブは ISO 文字列で返される。"""
+    job_dir = tmp_path / "job-rec"
+    _create_pending_job(job_dir)
+
+    dt = datetime(2025, 1, 15, 19, 30, 0, tzinfo=_JST)
+    save_recorded_at(job_dir, recorded_at=dt)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.get("/api/jobs")
+    assert response.status_code == 200
+    job = response.json()[0]
+    assert job["recorded_at"] is not None
+    parsed = datetime.fromisoformat(job["recorded_at"])
+    assert parsed == dt
 
     set_settings(None)
