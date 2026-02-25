@@ -68,7 +68,7 @@ describe("Dashboard component", () => {
     render(<Dashboard initialLanguage="ja" />);
 
     await waitFor(() =>
-      expect(screen.getByText("job-123")).toBeInTheDocument(),
+      expect(screen.getByText("job-1\u2026")).toBeInTheDocument(),
     );
 
     expect(
@@ -103,7 +103,7 @@ describe("Dashboard component", () => {
     await userEvent.click(deleteButton);
 
     await waitFor(() =>
-      expect(screen.queryByText("job-123")).not.toBeInTheDocument(),
+      expect(screen.queryByText("job-1\u2026")).not.toBeInTheDocument(),
     );
     expect(screen.getByText("Job deleted successfully.")).toBeInTheDocument();
     expect((global.fetch as jest.Mock).mock.calls.some((call) => {
@@ -120,7 +120,7 @@ describe("Dashboard component", () => {
     render(<Dashboard initialLanguage="ja" />);
 
     await waitFor(() =>
-      expect(screen.getByText("job-123")).toBeInTheDocument(),
+      expect(screen.getByText("job-1\u2026")).toBeInTheDocument(),
     );
 
     expect(
@@ -242,7 +242,7 @@ describe("Dashboard component", () => {
     render(<Dashboard initialLanguage="ja" />);
 
     await waitFor(() =>
-      expect(screen.getByText("job-partial")).toBeInTheDocument(),
+      expect(screen.getByText("job-p\u2026")).toBeInTheDocument(),
     );
 
     const progressBar = screen.getByRole("progressbar");

@@ -10,6 +10,7 @@ import {
   uploadVideo,
   deleteJob,
   updateJobTitle,
+  updateJobRecordedAt,
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
 
@@ -78,6 +79,9 @@ export default function Dashboard({
   const [editingTitleJobId, setEditingTitleJobId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState<string>("");
   const [savingTitleJobId, setSavingTitleJobId] = useState<string | null>(null);
+  const [editingRecordedAtJobId, setEditingRecordedAtJobId] = useState<string | null>(null);
+  const [editingRecordedAtValue, setEditingRecordedAtValue] = useState<string>("");
+  const [savingRecordedAtJobId, setSavingRecordedAtJobId] = useState<string | null>(null);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -197,6 +201,7 @@ export default function Dashboard({
   };
 
   const handleTitleClick = (job: JobSummary) => {
+    setEditingRecordedAtJobId(null);
     setEditingTitleJobId(job.job_id);
     setEditingTitleValue(job.title ?? "");
   };
@@ -243,6 +248,63 @@ export default function Dashboard({
     const value = editingTitleValue;
     setEditingTitleJobId(null);
     handleTitleSave(jobId, value);
+  };
+
+  const handleRecordedAtClick = (job: JobSummary) => {
+    setEditingTitleJobId(null);
+    setEditingRecordedAtJobId(job.job_id);
+    if (job.recorded_at) {
+      const dt = new Date(job.recorded_at);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const local = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+      setEditingRecordedAtValue(local);
+    } else {
+      setEditingRecordedAtValue("");
+    }
+  };
+
+  const handleRecordedAtSave = async (jobId: string, value: string) => {
+    if (!value) {
+      setEditingRecordedAtJobId(null);
+      return;
+    }
+
+    setSavingRecordedAtJobId(jobId);
+    try {
+      const isoValue = new Date(value).toISOString();
+      await updateJobRecordedAt(jobId, isoValue);
+      setNotification(copy.recordedAtSaveSuccess);
+      setNotificationType("success");
+      await loadJobs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setNotification(copy.recordedAtSaveError + message);
+      setNotificationType("error");
+    } finally {
+      setSavingRecordedAtJobId(null);
+      setEditingRecordedAtJobId(null);
+    }
+  };
+
+  const handleRecordedAtKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    jobId: string,
+  ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const value = editingRecordedAtValue;
+      setEditingRecordedAtJobId(null);
+      handleRecordedAtSave(jobId, value);
+    } else if (event.key === "Escape") {
+      setEditingRecordedAtJobId(null);
+    }
+  };
+
+  const handleRecordedAtBlur = (jobId: string) => {
+    if (editingRecordedAtJobId !== jobId) return;
+    const value = editingRecordedAtValue;
+    setEditingRecordedAtJobId(null);
+    handleRecordedAtSave(jobId, value);
   };
 
   const renderLastUpdated = () => {
@@ -393,10 +455,10 @@ export default function Dashboard({
               <thead className="bg-slate-900/80 uppercase tracking-wide text-slate-400">
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.jobId}
+                    {copy.jobsHeaders.title}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.title}
+                    {copy.jobsHeaders.recordedAt}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.status}
@@ -405,13 +467,13 @@ export default function Dashboard({
                     {copy.jobsHeaders.progress}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.recordedAt}
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.updatedAt}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.summary}
+                  </th>
+                  <th className="px-4 py-3 text-left font-semibold">
+                    {copy.jobsHeaders.jobId}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.actions}
@@ -423,9 +485,6 @@ export default function Dashboard({
                   const statusInfo = formatStatus(job.status, language);
                   return (
                     <tr key={job.job_id} className="hover:bg-slate-900/80">
-                      <td className="px-4 py-3 font-mono text-slate-200">
-                        {job.job_id}
-                      </td>
                       <td className="px-4 py-3 text-slate-200">
                         {editingTitleJobId === job.job_id ? (
                           <input
@@ -454,6 +513,38 @@ export default function Dashboard({
                             ) : (
                               <span className="italic text-slate-500">
                                 {copy.titlePlaceholder}
+                              </span>
+                            )}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-200">
+                        {editingRecordedAtJobId === job.job_id ? (
+                          <input
+                            type="datetime-local"
+                            value={editingRecordedAtValue}
+                            onChange={(e) => setEditingRecordedAtValue(e.target.value)}
+                            onKeyDown={(e) => handleRecordedAtKeyDown(e, job.job_id)}
+                            onBlur={() => handleRecordedAtBlur(job.job_id)}
+                            disabled={savingRecordedAtJobId === job.job_id}
+                            autoFocus
+                            className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            aria-label={copy.recordedAtEditLabel}
+                            data-testid="recorded-at-input"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleRecordedAtClick(job)}
+                            className="w-full cursor-pointer rounded px-2 py-1 text-left text-sm transition hover:bg-slate-800"
+                            title={copy.recordedAtEditLabel}
+                            data-testid="recorded-at-display"
+                          >
+                            {job.recorded_at ? (
+                              <span>{formatDateTime(job.recorded_at, language)}</span>
+                            ) : (
+                              <span className="italic text-slate-500">
+                                {copy.recordedAtPlaceholder}
                               </span>
                             )}
                           </button>
@@ -531,15 +622,13 @@ export default function Dashboard({
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-200">
-                        {job.recorded_at
-                          ? formatDateTime(job.recorded_at, language)
-                          : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-200">
                         {formatDateTime(job.updated_at, language)}
                       </td>
                       <td className="px-4 py-3 text-slate-200">
                         {job.summary_count} / {job.action_item_count}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-200" title={job.job_id}>
+                        {job.job_id.length > 5 ? job.job_id.slice(0, 5) + "\u2026" : job.job_id}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">

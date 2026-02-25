@@ -130,6 +130,20 @@ export async function updateJobTitle(
   );
 }
 
+export async function updateJobRecordedAt(
+  jobId: string,
+  recordedAt: string,
+): Promise<JobDetail> {
+  return requestJson<JobDetail>(
+    `${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recorded_at: recordedAt }),
+    },
+  );
+}
+
 type UploadOptions = {
   onProgress?: (percentage: number) => void;
   signal?: AbortSignal;

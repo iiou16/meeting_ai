@@ -476,3 +476,70 @@ def test_job_with_recorded_at_returns_iso_string(tmp_path: Path) -> None:
     assert parsed == dt
 
     set_settings(None)
+
+
+# ---------- PATCH /api/jobs/{job_id} with recorded_at ----------
+
+
+def test_patch_job_recorded_at_success(tmp_path: Path) -> None:
+    """PATCH で recorded_at を設定し、レスポンスと永続化を確認。"""
+    job_dir = tmp_path / "job-rec-patch"
+    _create_completed_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    dt = datetime(2025, 3, 10, 14, 30, 0, tzinfo=timezone.utc)
+    response = client.patch(
+        "/api/jobs/job-rec-patch",
+        json={"recorded_at": dt.isoformat()},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["recorded_at"] is not None
+    parsed = datetime.fromisoformat(payload["recorded_at"])
+    assert parsed == dt
+
+    # ディスクにも保存されていること
+    from meetingai_backend.job_state import load_recorded_at as _load_ra
+
+    assert _load_ra(job_dir) == dt
+
+    set_settings(None)
+
+
+def test_patch_job_empty_body_returns_422(tmp_path: Path) -> None:
+    """title も recorded_at も指定しない空ボディは 422。"""
+    job_dir = tmp_path / "job-empty-body"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-empty-body",
+        json={},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)
+
+
+def test_patch_job_invalid_recorded_at_returns_422(tmp_path: Path) -> None:
+    """不正な日時フォーマットは 422。"""
+    job_dir = tmp_path / "job-bad-date"
+    _create_pending_job(job_dir)
+
+    settings = _make_settings(tmp_path)
+    set_settings(settings)
+    client = TestClient(create_app())
+
+    response = client.patch(
+        "/api/jobs/job-bad-date",
+        json={"recorded_at": "not-a-date"},
+    )
+    assert response.status_code == 422
+
+    set_settings(None)

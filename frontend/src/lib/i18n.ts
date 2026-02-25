@@ -54,6 +54,10 @@ type BaseCopy = {
   titleEditLabel: string;
   titleSaveSuccess: string;
   titleSaveError: string;
+  recordedAtEditLabel: string;
+  recordedAtPlaceholder: string;
+  recordedAtSaveSuccess: string;
+  recordedAtSaveError: string;
 };
 
 function jaCopy(): BaseCopy {
@@ -134,6 +138,10 @@ function jaCopy(): BaseCopy {
     titleEditLabel: "タイトルを編集",
     titleSaveSuccess: "タイトルを保存しました。",
     titleSaveError: "タイトルの保存に失敗しました: ",
+    recordedAtEditLabel: "収録日時を編集",
+    recordedAtPlaceholder: "収録日時を設定...",
+    recordedAtSaveSuccess: "収録日時を保存しました。",
+    recordedAtSaveError: "収録日時の保存に失敗しました: ",
   };
 }
 
@@ -216,6 +224,10 @@ function enCopy(): BaseCopy {
     titleEditLabel: "Edit title",
     titleSaveSuccess: "Title saved successfully.",
     titleSaveError: "Failed to save title: ",
+    recordedAtEditLabel: "Edit recorded date",
+    recordedAtPlaceholder: "Set recorded date...",
+    recordedAtSaveSuccess: "Recorded date saved successfully.",
+    recordedAtSaveError: "Failed to save recorded date: ",
   };
 }
 

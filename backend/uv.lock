@@ -610,6 +610,13 @@ dev = [
     { name = "ruff" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "black" },
+    { name = "isort" },
+    { name = "ruff" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.13.0" },
@@ -632,6 +639,13 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.37.0" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "black", specifier = ">=26.1.0" },
+    { name = "isort", specifier = ">=7.0.0" },
+    { name = "ruff", specifier = ">=0.15.0" },
+]
 
 [[package]]
 name = "mypy-extensions"

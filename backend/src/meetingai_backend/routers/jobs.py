@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 if TYPE_CHECKING:
     from ..transcription.progress import TranscriptionProgress
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..job_state import (
     JOB_STAGE_CHUNKING,
@@ -24,6 +24,7 @@ from ..job_state import (
     load_job_title,
     load_recorded_at,
     save_job_title,
+    save_recorded_at,
 )
 from ..media.assets import load_media_assets
 from ..settings import Settings, get_settings
@@ -113,20 +114,33 @@ class JobDetail(JobSummary):
     )
 
 
-class JobTitleUpdate(BaseModel):
-    """Request body for updating job title."""
+class JobUpdate(BaseModel):
+    """Request body for updating job metadata (title and/or recorded_at)."""
 
-    title: str = Field(
-        ..., min_length=1, max_length=200, description="New title for the job."
+    title: str | None = Field(
+        None, min_length=1, max_length=200, description="New title for the job."
+    )
+    recorded_at: datetime | None = Field(
+        None, description="New recorded-at timestamp (ISO 8601)."
     )
 
     @field_validator("title")
     @classmethod
-    def title_must_not_be_blank(cls, v: str) -> str:
+    def title_must_not_be_blank(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
         stripped = v.strip()
         if not stripped:
             raise ValueError("title must not be blank")
         return stripped
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> JobUpdate:
+        if self.title is None and self.recorded_at is None:
+            raise ValueError(
+                "at least one of 'title' or 'recorded_at' must be provided"
+            )
+        return self
 
 
 def _iter_job_directories(settings: Settings) -> list[Path]:
@@ -335,17 +349,20 @@ def get_job(job_id: str, settings: Settings = Depends(get_settings)) -> JobDetai
 
 
 @router.patch("/{job_id}", response_model=JobDetail)
-def update_job_title(
+def update_job(
     job_id: str,
-    body: JobTitleUpdate,
+    body: JobUpdate,
     settings: Settings = Depends(get_settings),
 ) -> JobDetail:
-    """Update the user-assigned title for a job."""
+    """Update the user-assigned title and/or recorded_at for a job."""
     job_directory = settings.upload_root / job_id
     if not job_directory.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
 
-    save_job_title(job_directory, title=body.title)
+    if body.title is not None:
+        save_job_title(job_directory, title=body.title)
+    if body.recorded_at is not None:
+        save_recorded_at(job_directory, recorded_at=body.recorded_at)
     return _load_job_detail(job_id, job_directory)
 
 
@@ -355,5 +372,5 @@ __all__ = [
     "JobSummary",
     "JobDetail",
     "JobFailure",
-    "JobTitleUpdate",
+    "JobUpdate",
 ]
