@@ -80,7 +80,7 @@ describe("Dashboard component", () => {
     expect(screen.getByText("完了")).toBeInTheDocument();
     expect(screen.getByText("4/4 · 要約生成")).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.getByText("ジョブを削除")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ジョブを削除" })).toBeInTheDocument();
 
     const progressBar = screen.getByRole("progressbar");
     expect(progressBar).toBeInTheDocument();

@@ -626,11 +626,23 @@ export default function Dashboard({
                               type="button"
                               onClick={() => handleDeleteJob(job.job_id)}
                               disabled={deletingJobId === job.job_id}
-                              className="rounded-lg border border-red-500 px-4 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                              className="rounded-lg border border-red-500 p-2 text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                              title={copy.deleteButton}
                             >
-                              {deletingJobId === job.job_id
-                                ? copy.deleteInProgress
-                                : copy.deleteButton}
+                              {deletingJobId === job.job_id ? (
+                                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                              ) : (
+                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                                  <path d="M10 11v6" />
+                                  <path d="M14 11v6" />
+                                  <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+                                </svg>
+                              )}
                             </button>
                           )}
                         </div>
