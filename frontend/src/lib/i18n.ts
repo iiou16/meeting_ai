@@ -58,6 +58,21 @@ type BaseCopy = {
   recordedAtPlaceholder: string;
   recordedAtSaveSuccess: string;
   recordedAtSaveError: string;
+  speakerHeading: string;
+  speakerLabelColumn: string;
+  speakerNameColumn: string;
+  speakerOrgColumn: string;
+  speakerActionsColumn: string;
+  speakerNamePlaceholder: string;
+  speakerOrgPlaceholder: string;
+  speakerSave: string;
+  speakerReset: string;
+  speakerSaveSuccess: string;
+  speakerSaveError: string;
+  speakerSelectMergeSource: string;
+  speakerMergeInto: string;
+  speakerUnmerge: string;
+  speakerMergedFrom: (labels: string) => string;
 };
 
 function jaCopy(): BaseCopy {
@@ -142,6 +157,21 @@ function jaCopy(): BaseCopy {
     recordedAtPlaceholder: "収録日時を設定...",
     recordedAtSaveSuccess: "収録日時を保存しました。",
     recordedAtSaveError: "収録日時の保存に失敗しました: ",
+    speakerHeading: "話者プロフィール",
+    speakerLabelColumn: "ラベル",
+    speakerNameColumn: "名前",
+    speakerOrgColumn: "所属",
+    speakerActionsColumn: "操作",
+    speakerNamePlaceholder: "名前を入力...",
+    speakerOrgPlaceholder: "所属を入力...",
+    speakerSave: "保存",
+    speakerReset: "リセット",
+    speakerSaveSuccess: "話者プロフィールを保存しました。",
+    speakerSaveError: "話者プロフィールの保存に失敗しました: ",
+    speakerSelectMergeSource: "統合元に選択",
+    speakerMergeInto: "ここに統合",
+    speakerUnmerge: "統合解除",
+    speakerMergedFrom: (labels: string) => `統合元: ${labels}`,
   };
 }
 
@@ -228,6 +258,21 @@ function enCopy(): BaseCopy {
     recordedAtPlaceholder: "Set recorded date...",
     recordedAtSaveSuccess: "Recorded date saved successfully.",
     recordedAtSaveError: "Failed to save recorded date: ",
+    speakerHeading: "Speaker Profiles",
+    speakerLabelColumn: "Label",
+    speakerNameColumn: "Name",
+    speakerOrgColumn: "Organization",
+    speakerActionsColumn: "Actions",
+    speakerNamePlaceholder: "Enter name...",
+    speakerOrgPlaceholder: "Enter organization...",
+    speakerSave: "Save",
+    speakerReset: "Reset",
+    speakerSaveSuccess: "Speaker profiles saved successfully.",
+    speakerSaveError: "Failed to save speaker profiles: ",
+    speakerSelectMergeSource: "Select as merge source",
+    speakerMergeInto: "Merge into this",
+    speakerUnmerge: "Unmerge",
+    speakerMergedFrom: (labels: string) => `Merged from: ${labels}`,
   };
 }
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Sequence
 
+from .job_state import SpeakerMappings
 from .summarization.models import ActionItem, SummaryItem
 from .transcription.segments import TranscriptSegment
 
@@ -25,6 +26,49 @@ def _escape_pipe(text: str) -> str:
     return text.replace("|", "\\|")
 
 
+def _resolve_speaker(
+    label: str | None,
+    mappings: SpeakerMappings | None,
+) -> str:
+    """Return the display name for a speaker label."""
+    if not label:
+        return ""
+    if mappings is not None:
+        profile = mappings.resolve_label(label)
+        if profile is not None:
+            return profile.name
+    return label
+
+
+def _render_speaker_table(
+    mappings: SpeakerMappings,
+) -> list[str]:
+    """Render a Markdown table listing all speaker profiles."""
+    lines: list[str] = []
+    lines.append("## Speakers")
+    lines.append("")
+    lines.append("| Name | Organization | Labels |")
+    lines.append("|------|-------------|--------|")
+
+    # Group labels by profile_id
+    profile_labels: dict[str, list[str]] = {}
+    for label, pid in mappings.label_to_profile.items():
+        labels_list = profile_labels.setdefault(pid, [])
+        labels_list.append(label)
+
+    for pid, labels in profile_labels.items():
+        profile = mappings.profiles[pid]
+        name = _escape_pipe(profile.name)
+        org = _escape_pipe(profile.organization) if profile.organization else "-"
+        labels_str = _escape_pipe(", ".join(sorted(labels)))
+        lines.append(f"| {name} | {org} | {labels_str} |")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    return lines
+
+
 def render_meeting_markdown(
     *,
     job_id: str,
@@ -32,6 +76,7 @@ def render_meeting_markdown(
     summary_items: Sequence[SummaryItem],
     action_items: Sequence[ActionItem],
     segments: Sequence[TranscriptSegment],
+    speaker_mappings: SpeakerMappings | None = None,
 ) -> str:
     """Return a full Markdown report for the given meeting artefacts."""
     lines: list[str] = []
@@ -46,6 +91,10 @@ def render_meeting_markdown(
     lines.append("")
     lines.append("---")
     lines.append("")
+
+    # --- Speaker Table ---
+    if speaker_mappings is not None and speaker_mappings.profiles:
+        lines.extend(_render_speaker_table(speaker_mappings))
 
     # --- Timestamped Summaries ---
     lines.append("## Timestamped Summaries")
@@ -114,7 +163,8 @@ def render_meeting_markdown(
     else:
         for segment in segments:
             ts = format_timestamp(segment.start_ms)
-            speaker = f" {segment.speaker_label}:" if segment.speaker_label else ""
+            speaker_name = _resolve_speaker(segment.speaker_label, speaker_mappings)
+            speaker = f" {speaker_name}:" if speaker_name else ""
             lines.append(f"**[{ts}]**{speaker} {segment.text}")
             lines.append("")
 

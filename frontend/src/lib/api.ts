@@ -83,12 +83,24 @@ export interface TranscriptSegment {
   speaker_label?: string | null;
 }
 
+export interface SpeakerProfile {
+  profile_id: string;
+  name: string;
+  organization: string;
+}
+
+export interface SpeakerMappings {
+  profiles: Record<string, SpeakerProfile>;
+  label_to_profile: Record<string, string>;
+}
+
 export interface MeetingDetail {
   job_id: string;
   summary_items: SummaryItem[];
   action_items: ActionItem[];
   segments: TranscriptSegment[];
   quality_metrics?: Record<string, unknown> | null;
+  speaker_mappings?: SpeakerMappings | null;
 }
 
 export async function fetchJobs(): Promise<JobSummary[]> {
@@ -114,6 +126,20 @@ export async function fetchMeetingMarkdown(jobId: string): Promise<Blob> {
     throw new Error(text || `Request failed with status ${response.status}`);
   }
   return response.blob();
+}
+
+export async function updateSpeakerMappings(
+  jobId: string,
+  mappings: SpeakerMappings,
+): Promise<SpeakerMappings> {
+  return requestJson<SpeakerMappings>(
+    `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}/speakers`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(mappings),
+    },
+  );
 }
 
 export async function deleteJob(jobId: string): Promise<void> {

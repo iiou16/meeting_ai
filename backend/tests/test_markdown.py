@@ -217,3 +217,89 @@ class TestRenderMeetingMarkdown:
             segments=[],
         )
         assert "**Exported**:" in md
+
+
+class TestSpeakerMappingsInMarkdown:
+    def _make_mappings(self) -> "SpeakerMappings":
+        from meetingai_backend.job_state import SpeakerMappings, SpeakerProfile
+
+        return SpeakerMappings(
+            profiles={
+                "p1": SpeakerProfile("p1", "Alice", "Engineering"),
+                "p2": SpeakerProfile("p2", "Bob", "Sales"),
+            },
+            label_to_profile={
+                "Speaker A": "p1",
+                "Speaker C": "p1",
+                "Speaker B": "p2",
+            },
+        )
+
+    def test_transcript_uses_resolved_names(self) -> None:
+        segments = [
+            _make_segment(text="Hello.", speaker_label="Speaker A"),
+            _make_segment(
+                order=1, start_ms=30_000, text="Hi.", speaker_label="Speaker B"
+            ),
+        ]
+        md = render_meeting_markdown(
+            job_id="job-1",
+            title=None,
+            summary_items=[],
+            action_items=[],
+            segments=segments,
+            speaker_mappings=self._make_mappings(),
+        )
+        assert "**[00:00]** Alice: Hello." in md
+        assert "**[00:30]** Bob: Hi." in md
+
+    def test_merged_label_resolves_to_same_name(self) -> None:
+        segments = [
+            _make_segment(text="One.", speaker_label="Speaker C"),
+        ]
+        md = render_meeting_markdown(
+            job_id="job-1",
+            title=None,
+            summary_items=[],
+            action_items=[],
+            segments=segments,
+            speaker_mappings=self._make_mappings(),
+        )
+        assert "**[00:00]** Alice: One." in md
+
+    def test_unmapped_label_uses_raw_label(self) -> None:
+        segments = [
+            _make_segment(text="Two.", speaker_label="Speaker Z"),
+        ]
+        md = render_meeting_markdown(
+            job_id="job-1",
+            title=None,
+            summary_items=[],
+            action_items=[],
+            segments=segments,
+            speaker_mappings=self._make_mappings(),
+        )
+        assert "**[00:00]** Speaker Z: Two." in md
+
+    def test_speaker_table_rendered(self) -> None:
+        md = render_meeting_markdown(
+            job_id="job-1",
+            title=None,
+            summary_items=[],
+            action_items=[],
+            segments=[],
+            speaker_mappings=self._make_mappings(),
+        )
+        assert "## Speakers" in md
+        assert "| Alice |" in md
+        assert "| Bob |" in md
+
+    def test_no_speaker_table_without_mappings(self) -> None:
+        md = render_meeting_markdown(
+            job_id="job-1",
+            title=None,
+            summary_items=[],
+            action_items=[],
+            segments=[],
+        )
+        assert "## Speakers" not in md

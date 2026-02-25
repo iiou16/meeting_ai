@@ -90,7 +90,86 @@ def test_get_meeting_returns_content(tmp_path: Path) -> None:
     assert len(payload["action_items"]) == 1
     assert payload["action_items"][0]["owner"] == "Carol"
 
+    # speaker_mappings is null when not set
+    assert payload["speaker_mappings"] is None
+
     missing = client.get("/api/meetings/unknown")
     assert missing.status_code == 404
+
+    set_settings(None)
+
+
+def test_get_meeting_includes_speaker_mappings(tmp_path: Path) -> None:
+    job_dir = tmp_path / "job-sp"
+    _seed_meeting(job_dir)
+    _configure_settings(tmp_path)
+
+    client = TestClient(create_app())
+
+    # Save speaker mappings via PUT
+    body = {
+        "profiles": {
+            "p1": {"profile_id": "p1", "name": "田中", "organization": "開発"},
+        },
+        "label_to_profile": {},
+    }
+    put_resp = client.put("/api/meetings/job-sp/speakers", json=body)
+    assert put_resp.status_code == 200
+
+    # GET should include mappings
+    get_resp = client.get("/api/meetings/job-sp")
+    assert get_resp.status_code == 200
+    payload = get_resp.json()
+    assert payload["speaker_mappings"] is not None
+    assert payload["speaker_mappings"]["profiles"]["p1"]["name"] == "田中"
+
+    set_settings(None)
+
+
+def test_put_speakers_validates_profile_id_reference(tmp_path: Path) -> None:
+    job_dir = tmp_path / "job-val"
+    _seed_meeting(job_dir)
+    _configure_settings(tmp_path)
+
+    client = TestClient(create_app())
+
+    body = {
+        "profiles": {
+            "p1": {"profile_id": "p1", "name": "Alice", "organization": ""},
+        },
+        "label_to_profile": {"Speaker A": "nonexistent"},
+    }
+    resp = client.put("/api/meetings/job-val/speakers", json=body)
+    assert resp.status_code == 422
+
+    set_settings(None)
+
+
+def test_put_speakers_validates_empty_name(tmp_path: Path) -> None:
+    job_dir = tmp_path / "job-empty-name"
+    _seed_meeting(job_dir)
+    _configure_settings(tmp_path)
+
+    client = TestClient(create_app())
+
+    body = {
+        "profiles": {
+            "p1": {"profile_id": "p1", "name": "", "organization": ""},
+        },
+        "label_to_profile": {},
+    }
+    resp = client.put("/api/meetings/job-empty-name/speakers", json=body)
+    assert resp.status_code == 422
+
+    set_settings(None)
+
+
+def test_put_speakers_not_found(tmp_path: Path) -> None:
+    _configure_settings(tmp_path)
+    client = TestClient(create_app())
+
+    body = {"profiles": {}, "label_to_profile": {}}
+    resp = client.put("/api/meetings/nonexistent/speakers", json=body)
+    assert resp.status_code == 404
 
     set_settings(None)
