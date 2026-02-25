@@ -21,7 +21,6 @@ type BaseCopy = {
     progress: string;
     recordedAt: string;
     updatedAt: string;
-    summary: string;
     actions: string;
   };
   statusLabels: Record<string, string>;
@@ -86,7 +85,6 @@ function jaCopy(): BaseCopy {
       progress: "進捗",
       recordedAt: "収録日時",
       updatedAt: "最終更新",
-      summary: "サマリー数 / アクション数",
       actions: "操作",
     },
     statusLabels: {
@@ -172,7 +170,6 @@ function enCopy(): BaseCopy {
       progress: "Progress",
       recordedAt: "Recorded At",
       updatedAt: "Last Update",
-      summary: "Summary / Actions",
       actions: "Actions",
     },
     statusLabels: {

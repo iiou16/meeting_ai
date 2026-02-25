@@ -201,6 +201,74 @@ describe("Dashboard component", () => {
     });
   });
 
+  it("hides description text for completed status", async () => {
+    render(<Dashboard initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("完了")).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.queryByText("すべての処理が完了しました。"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows failure stage and message but hides failure time for failed status", async () => {
+    const failedJobs = [
+      {
+        job_id: "job-fail1",
+        title: "失敗ジョブ",
+        status: "failed",
+        created_at: "2025-05-25T10:00:00Z",
+        updated_at: "2025-05-25T10:30:00Z",
+        recorded_at: null,
+        progress: 0.5,
+        stage_index: 2,
+        stage_count: 4,
+        stage_key: "transcription",
+        duration_ms: null,
+        languages: [],
+        summary_count: 0,
+        action_item_count: 0,
+        can_delete: true,
+        failure: {
+          stage: "transcription",
+          message: "API rate limit exceeded",
+          occurred_at: "2025-05-25T10:30:00Z",
+        },
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockImplementation(
+      (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const method = init?.method ?? "GET";
+        if (url.includes("/api/jobs") && method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(failedJobs),
+          } as Response);
+        }
+        return Promise.reject(
+          new Error(`Unexpected fetch call ${method} ${url}`),
+        );
+      },
+    );
+
+    render(<Dashboard initialLanguage="ja" />);
+
+    await waitFor(() =>
+      expect(screen.getByText("失敗")).toBeInTheDocument(),
+    );
+
+    expect(screen.getByTestId("failure-stage")).toBeInTheDocument();
+    expect(screen.getByTestId("failure-message")).toHaveTextContent(
+      "API rate limit exceeded",
+    );
+    expect(screen.queryByTestId("failure-time")).not.toBeInTheDocument();
+  });
+
   it("renders progress bar with partial progress", async () => {
     const partialJobs = [
       {

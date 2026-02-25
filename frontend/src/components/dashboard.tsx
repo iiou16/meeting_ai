@@ -454,14 +454,11 @@ export default function Dashboard({
             <table className="min-w-full divide-y divide-slate-800 text-sm">
               <thead className="bg-slate-900/80 uppercase tracking-wide text-slate-400">
                 <tr>
-                  <th className="px-4 py-3 text-left font-semibold">
+                  <th className="min-w-[14rem] px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.title}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.recordedAt}
-                  </th>
-                  <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.status}
                   </th>
                   <th className="w-48 px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.progress}
@@ -469,8 +466,8 @@ export default function Dashboard({
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.updatedAt}
                   </th>
-                  <th className="px-4 py-3 text-left font-semibold">
-                    {copy.jobsHeaders.summary}
+                  <th className="w-20 px-3 py-3 text-left font-semibold">
+                    {copy.jobsHeaders.status}
                   </th>
                   <th className="px-4 py-3 text-left font-semibold">
                     {copy.jobsHeaders.jobId}
@@ -551,53 +548,6 @@ export default function Dashboard({
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          <span
-                            className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                              job.status === "failed"
-                                ? "bg-red-500/20 text-red-200"
-                                : "bg-slate-800 text-slate-200"
-                            }`}
-                          >
-                            {statusInfo.label}
-                          </span>
-                          {job.failure ? (
-                            <>
-                              <span
-                                className="text-xs text-red-300"
-                                data-testid="failure-stage"
-                              >
-                                {copy.failedAtStage(
-                                  copy.stageLabels[job.failure.stage] ??
-                                    job.failure.stage,
-                                )}
-                              </span>
-                              <span
-                                className="line-clamp-2 text-xs text-red-400/80"
-                                data-testid="failure-message"
-                              >
-                                {job.failure.message}
-                              </span>
-                              <span
-                                className="text-xs text-slate-500"
-                                data-testid="failure-time"
-                              >
-                                {copy.failureOccurredAt(
-                                  formatDateTime(
-                                    job.failure.occurred_at,
-                                    language,
-                                  ),
-                                )}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-slate-400">
-                              {statusInfo.description}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center gap-2">
                             <div
@@ -624,8 +574,41 @@ export default function Dashboard({
                       <td className="px-4 py-3 text-slate-200">
                         {formatDateTime(job.updated_at, language)}
                       </td>
-                      <td className="px-4 py-3 text-slate-200">
-                        {job.summary_count} / {job.action_item_count}
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
+                              job.status === "failed"
+                                ? "bg-red-500/20 text-red-200"
+                                : "bg-slate-800 text-slate-200"
+                            }`}
+                          >
+                            {statusInfo.label}
+                          </span>
+                          {job.failure ? (
+                            <>
+                              <span
+                                className="text-xs text-red-300"
+                                data-testid="failure-stage"
+                              >
+                                {copy.failedAtStage(
+                                  copy.stageLabels[job.failure.stage] ??
+                                    job.failure.stage,
+                                )}
+                              </span>
+                              <span
+                                className="line-clamp-2 text-xs text-red-400/80"
+                                data-testid="failure-message"
+                              >
+                                {job.failure.message}
+                              </span>
+                            </>
+                          ) : job.status !== "completed" ? (
+                            <span className="text-xs text-slate-400">
+                              {statusInfo.description}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3 font-mono text-slate-200" title={job.job_id}>
                         {job.job_id.length > 5 ? job.job_id.slice(0, 5) + "\u2026" : job.job_id}
