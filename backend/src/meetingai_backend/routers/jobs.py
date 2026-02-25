@@ -268,7 +268,7 @@ def _load_job_summary(job_id: str, job_directory: Path) -> JobSummary:
         progress_record = load_transcription_progress(job_directory)
         progress = _compute_progress(stage_index, stage_key, progress_record)
         failure = _build_failure_record(failure_record)
-        can_delete = False
+        can_delete = True
     else:
         stage_index, stage_key = _detect_stage(job_directory)
         status_value = _determine_status(stage_index)

@@ -286,6 +286,8 @@ def test_job_with_unknown_failure_stage(tmp_path: Path) -> None:
     assert bad_job["failure"]["message"] == "test error with unknown stage"
     # 未知のstageでもstage_keyは記録されたstage値がそのまま返ること
     assert bad_job["failure"]["stage"] == "rq_worker"
+    # 失敗ジョブは削除可能であること
+    assert bad_job["can_delete"] is True
 
     # 個別ジョブ詳細も同様に取得できること
     detail_response = client.get("/api/jobs/job-bad-stage")
