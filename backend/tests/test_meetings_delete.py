@@ -32,7 +32,7 @@ def test_delete_completed_meeting_removes_directory(tmp_path: Path) -> None:
     job_dir = tmp_path / "job-001"
     _create_completed_job(job_dir)
     (job_dir / "audio_chunks").mkdir()
-    (job_dir / "audio_chunks" / "chunk.mp3").write_bytes(b"data")
+    (job_dir / "audio_chunks" / "chunk.wav").write_bytes(b"data")
 
     settings = _make_settings(tmp_path)
     set_settings(settings)
@@ -71,7 +71,7 @@ def test_delete_processing_job_returns_409(tmp_path: Path) -> None:
     job_dir.mkdir()
     chunks_dir = job_dir / "audio_chunks"
     chunks_dir.mkdir()
-    (chunks_dir / "chunk_000.mp3").write_bytes(b"data")
+    (chunks_dir / "chunk_000.wav").write_bytes(b"data")
 
     settings = _make_settings(tmp_path)
     set_settings(settings)

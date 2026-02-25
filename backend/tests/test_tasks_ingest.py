@@ -31,7 +31,7 @@ def _common_monkeypatches(monkeypatch, settings, *, creation_time=None):
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == settings.ffmpeg_path
-        destination = path.with_suffix(".mp3")
+        destination = path.with_suffix(".wav")
         destination.write_bytes(b"audio")
         return destination
 
@@ -52,7 +52,7 @@ def _common_monkeypatches(monkeypatch, settings, *, creation_time=None):
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -110,7 +110,7 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == "ffmpeg-test"
-        destination = path.with_suffix(".mp3")
+        destination = path.with_suffix(".wav")
         destination.write_bytes(b"audio")
         return destination
 
@@ -140,7 +140,7 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -221,7 +221,7 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == "ffmpeg-test"
-        destination = path.parent / f"{path.stem}_audio.mp3"
+        destination = path.parent / f"{path.stem}_audio.wav"
         destination.write_bytes(b"audio")
         return destination
 
@@ -251,7 +251,7 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -304,7 +304,7 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
     video.write_bytes(b"binary-video")
 
     def fake_extract_audio(path: Path, *, config):
-        destination = path.with_suffix(".mp3")
+        destination = path.with_suffix(".wav")
         destination.write_bytes(b"audio")
         return destination
 
@@ -334,7 +334,7 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",

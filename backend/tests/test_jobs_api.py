@@ -150,7 +150,7 @@ def test_stage_info_transcribing(tmp_path: Path) -> None:
     job_dir.mkdir()
     chunks_dir = job_dir / "audio_chunks"
     chunks_dir.mkdir()
-    (chunks_dir / "chunk_000.mp3").write_bytes(b"\x00\x00")
+    (chunks_dir / "chunk_000.wav").write_bytes(b"\x00\x00")
 
     settings = _make_settings(tmp_path)
     set_settings(settings)
@@ -175,8 +175,8 @@ def test_sub_progress_during_transcription(tmp_path: Path) -> None:
     job_dir.mkdir()
     chunks_dir = job_dir / "audio_chunks"
     chunks_dir.mkdir()
-    (chunks_dir / "chunk_000.mp3").write_bytes(b"\x00\x00")
-    (chunks_dir / "chunk_001.mp3").write_bytes(b"\x00\x00")
+    (chunks_dir / "chunk_000.wav").write_bytes(b"\x00\x00")
+    (chunks_dir / "chunk_001.wav").write_bytes(b"\x00\x00")
 
     tracker = ProgressTracker(job_dir, chunks_total=9)
     tracker.initialize()

@@ -19,7 +19,7 @@ def _fake_ffprobe_run(command, check, capture_output, text):
     elif binary == "ffmpeg":
         # Create the output chunk file
         output_path = Path(command[-1])
-        output_path.write_bytes(b"mp3-chunk-data")
+        output_path.write_bytes(b"wav-chunk-data")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
     raise ValueError(f"Unexpected binary: {binary}")
 
@@ -34,7 +34,7 @@ def _fake_ffprobe_run_with_duration(duration_seconds: float):
             return SimpleNamespace(returncode=0, stdout=output, stderr="")
         elif binary == "ffmpeg":
             output_path = Path(command[-1])
-            output_path.write_bytes(b"mp3-chunk-data")
+            output_path.write_bytes(b"wav-chunk-data")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         raise ValueError(f"Unexpected binary: {binary}")
 
@@ -44,8 +44,8 @@ def _fake_ffprobe_run_with_duration(duration_seconds: float):
 def test_split_audio_into_chunks_creates_expected_segments(
     monkeypatch, tmp_path
 ) -> None:
-    audio = tmp_path / "input.mp3"
-    audio.write_bytes(b"fake-mp3-data")
+    audio = tmp_path / "input.wav"
+    audio.write_bytes(b"fake-wav-data")
 
     monkeypatch.setattr(
         "meetingai_backend.media.chunking.subprocess.run",
@@ -76,12 +76,12 @@ def test_split_audio_into_chunks_creates_expected_segments(
     for index, spec in enumerate(specs):
         assert spec.path.exists()
         assert spec.asset.order == index
-        assert spec.path.suffix == ".mp3"
+        assert spec.path.suffix == ".wav"
 
 
 def test_split_audio_into_chunks_single_chunk(monkeypatch, tmp_path) -> None:
-    audio = tmp_path / "short.mp3"
-    audio.write_bytes(b"fake-mp3-data")
+    audio = tmp_path / "short.wav"
+    audio.write_bytes(b"fake-wav-data")
 
     monkeypatch.setattr(
         "meetingai_backend.media.chunking.subprocess.run",
@@ -96,8 +96,8 @@ def test_split_audio_into_chunks_single_chunk(monkeypatch, tmp_path) -> None:
 
 
 def test_split_audio_into_chunks_invalid_duration(tmp_path) -> None:
-    audio = tmp_path / "input.mp3"
-    audio.write_bytes(b"fake-mp3-data")
+    audio = tmp_path / "input.wav"
+    audio.write_bytes(b"fake-wav-data")
 
     with pytest.raises(ValueError):
         split_audio_into_chunks(audio, job_id="job", chunk_duration_seconds=0)
@@ -105,12 +105,12 @@ def test_split_audio_into_chunks_invalid_duration(tmp_path) -> None:
 
 def test_split_audio_into_chunks_missing_file(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
-        split_audio_into_chunks(tmp_path / "missing.mp3", job_id="job")
+        split_audio_into_chunks(tmp_path / "missing.wav", job_id="job")
 
 
 def test_split_audio_into_chunks_zero_duration(monkeypatch, tmp_path) -> None:
-    audio = tmp_path / "empty.mp3"
-    audio.write_bytes(b"fake-mp3-data")
+    audio = tmp_path / "empty.wav"
+    audio.write_bytes(b"fake-wav-data")
 
     def fake_run(command, check, capture_output, text):
         binary = Path(command[0]).name

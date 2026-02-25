@@ -206,7 +206,7 @@ def split_audio_into_chunks(
         remaining = total_duration - position_seconds
         chunk_length = min(float(chunk_duration_seconds), remaining)
 
-        chunk_path = destination_root / f"{source.stem}_chunk_{index:04d}.mp3"
+        chunk_path = destination_root / f"{source.stem}_chunk_{index:04d}.wav"
         _cut_chunk(
             source,
             output_path=chunk_path,
