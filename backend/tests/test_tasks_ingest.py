@@ -91,6 +91,7 @@ def _common_monkeypatches(monkeypatch, settings, *, creation_time=None):
     ):
         queued["job_id"] = job_id
         queued["job_directory"] = job_directory
+        queued["language"] = language
 
     monkeypatch.setattr(
         "meetingai_backend.tasks.ingest.get_job_queue",
@@ -435,3 +436,47 @@ def test_process_uploaded_video_no_recorded_at_when_none(monkeypatch, tmp_path) 
 
     assert load_recorded_at(tmp_path) is None
     assert not (tmp_path / "job_recorded_at.json").exists()
+
+
+def test_process_uploaded_video_passes_language_to_transcription(
+    monkeypatch, tmp_path
+) -> None:
+    """language parameter is forwarded to enqueue_transcription_job."""
+    video = tmp_path / "recording.mp4"
+    video.write_bytes(b"binary-video")
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg-test",
+    )
+    set_settings(settings)
+
+    queued = _common_monkeypatches(monkeypatch, settings, creation_time=None)
+
+    process_uploaded_video(job_id="lang-test", source_path=str(video), language="en")
+
+    assert queued["language"] == "en"
+
+
+def test_process_uploaded_video_defaults_language_to_ja(monkeypatch, tmp_path) -> None:
+    """When language is not specified, it defaults to 'ja'."""
+    video = tmp_path / "recording.mp4"
+    video.write_bytes(b"binary-video")
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg-test",
+    )
+    set_settings(settings)
+
+    queued = _common_monkeypatches(monkeypatch, settings, creation_time=None)
+
+    process_uploaded_video(job_id="lang-default", source_path=str(video))
+
+    assert queued["language"] == "ja"

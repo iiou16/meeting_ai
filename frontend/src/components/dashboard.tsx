@@ -64,6 +64,7 @@ export default function Dashboard({
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const copy = useMemo(() => getCopy(language), [language]);
 
+  const [transcriptionLanguage, setTranscriptionLanguage] = useState<"ja" | "en">("ja");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -149,6 +150,7 @@ export default function Dashboard({
 
     try {
       await uploadVideo(selectedFile, {
+        language: transcriptionLanguage,
         signal: controller.signal,
         onProgress: (progress) => setUploadProgress(progress),
       });
@@ -362,6 +364,28 @@ export default function Dashboard({
               aria-label={copy.uploadSelectPlaceholder}
             />
           </label>
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-sm font-semibold text-slate-200">
+              {copy.transcriptionLanguageLabel}
+            </legend>
+            <div className="flex gap-2" data-testid="transcription-language-selector">
+              {(["ja", "en"] as const).map((lang) => (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => setTranscriptionLanguage(lang)}
+                  className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition ${
+                    transcriptionLanguage === lang
+                      ? "border-blue-500 bg-blue-600 text-white"
+                      : "border-slate-600 bg-slate-900 text-slate-200 hover:border-slate-400"
+                  }`}
+                  aria-pressed={transcriptionLanguage === lang}
+                >
+                  {copy.transcriptionLanguageNames[lang]}
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex gap-2">
             <button
               type="button"

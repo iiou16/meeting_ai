@@ -182,6 +182,7 @@ export async function updateJobRecordedAt(
 }
 
 type UploadOptions = {
+  language?: "ja" | "en";
   onProgress?: (percentage: number) => void;
   signal?: AbortSignal;
 };
@@ -190,12 +191,15 @@ export function uploadVideo(
   file: File,
   options: UploadOptions = {},
 ): Promise<UploadResponse> {
-  const { onProgress, signal } = options;
+  const { language, onProgress, signal } = options;
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("file", file);
+    if (language !== undefined) {
+      formData.append("language", language);
+    }
 
     xhr.open("POST", `${API_BASE}/api/videos`, true);
 

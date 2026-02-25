@@ -200,3 +200,80 @@ async def test_upload_audio_enqueues_job(
     payload = response.json()
     assert job_kwargs["job_id"] == payload["job_id"]
     assert job_kwargs["source_path"].endswith("recording.mp3")
+
+
+@pytest.mark.asyncio
+async def test_upload_video_passes_language_ja(
+    monkeypatch, tmp_path, stub_job_queue: _StubQueue
+) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("meeting.mp4", b"bytes", "video/mp4")},
+            data={"language": "ja"},
+        )
+
+    assert response.status_code == 202
+    call = stub_job_queue.calls[0]
+    job_kwargs = call["kwargs"]["kwargs"]
+    assert job_kwargs["language"] == "ja"
+
+
+@pytest.mark.asyncio
+async def test_upload_video_passes_language_en(
+    monkeypatch, tmp_path, stub_job_queue: _StubQueue
+) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("meeting.mp4", b"bytes", "video/mp4")},
+            data={"language": "en"},
+        )
+
+    assert response.status_code == 202
+    call = stub_job_queue.calls[0]
+    job_kwargs = call["kwargs"]["kwargs"]
+    assert job_kwargs["language"] == "en"
+
+
+@pytest.mark.asyncio
+async def test_upload_video_defaults_language_to_ja(
+    monkeypatch, tmp_path, stub_job_queue: _StubQueue
+) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("meeting.mp4", b"bytes", "video/mp4")},
+        )
+
+    assert response.status_code == 202
+    call = stub_job_queue.calls[0]
+    job_kwargs = call["kwargs"]["kwargs"]
+    assert job_kwargs["language"] == "ja"
+
+
+@pytest.mark.asyncio
+async def test_upload_video_rejects_invalid_language(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setenv("MEETINGAI_UPLOAD_DIR", str(upload_root))
+
+    async with _create_test_client() as client:
+        response = await client.post(
+            "/api/videos",
+            files={"file": ("meeting.mp4", b"bytes", "video/mp4")},
+            data={"language": "fr"},
+        )
+
+    assert response.status_code == 422

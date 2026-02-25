@@ -59,7 +59,23 @@ class TestEnqueueVideoIngestJob:
         positional_args = q.calls[0][1]
         kwargs = q.calls[0][2]
         assert positional_args == ()
-        assert kwargs == {"kwargs": {"job_id": "j1", "source_path": "/tmp/v.mp4"}}
+        assert kwargs == {
+            "kwargs": {"job_id": "j1", "source_path": "/tmp/v.mp4", "language": "ja"}
+        }
+
+    def test_language_included_in_kwargs(self) -> None:
+        q = _RecordingQueue()
+        enqueue_video_ingest_job(
+            queue=q, job_id="j1", source_path="/tmp/v.mp4", language="en"
+        )
+        kwargs = q.calls[0][2]["kwargs"]
+        assert kwargs["language"] == "en"
+
+    def test_language_defaults_to_ja(self) -> None:
+        q = _RecordingQueue()
+        enqueue_video_ingest_job(queue=q, job_id="j1", source_path="/tmp/v.mp4")
+        kwargs = q.calls[0][2]["kwargs"]
+        assert kwargs["language"] == "ja"
 
     def test_returns_enqueue_result(self) -> None:
         q = _RecordingQueue()

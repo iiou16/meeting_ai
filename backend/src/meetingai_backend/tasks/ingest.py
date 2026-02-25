@@ -55,8 +55,17 @@ def _build_master_asset(
     )
 
 
-def process_uploaded_video(*, job_id: str, source_path: str) -> dict[str, object]:
+def process_uploaded_video(
+    *, job_id: str, source_path: str, language: str = "ja"
+) -> dict[str, object]:
     """Process an uploaded video or audio file by extracting/converting audio and recording metadata."""
+    from ..jobs import SUPPORTED_LANGUAGES
+
+    if language not in SUPPORTED_LANGUAGES:
+        raise ValueError(
+            f"Unsupported language: {language!r}. Must be one of {SUPPORTED_LANGUAGES}"
+        )
+
     path = Path(source_path)
     job_directory = path.parent
     clear_job_failure(job_directory)
@@ -114,6 +123,7 @@ def process_uploaded_video(*, job_id: str, source_path: str) -> dict[str, object
             queue=queue,
             job_id=job_id,
             job_directory=str(job_directory),
+            language=language,
         )
     except Exception as exc:
         logger.exception(

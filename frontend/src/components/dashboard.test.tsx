@@ -88,8 +88,9 @@ describe("Dashboard component", () => {
     expect(progressBar).toHaveAttribute("aria-valuemin", "0");
     expect(progressBar).toHaveAttribute("aria-valuemax", "100");
 
-    const englishButton = screen.getByRole("button", { name: "English" });
-    await userEvent.click(englishButton);
+    const englishButtons = screen.getAllByRole("button", { name: "English" });
+    // First "English" button is the UI language switcher in the header
+    await userEvent.click(englishButtons[0]);
 
     expect(
       screen.getByRole("columnheader", { name: "Job ID" }),
@@ -267,6 +268,31 @@ describe("Dashboard component", () => {
       "API rate limit exceeded",
     );
     expect(screen.queryByTestId("failure-time")).not.toBeInTheDocument();
+  });
+
+  it("renders transcription language selector with default ja selected", async () => {
+    render(<Dashboard initialLanguage="ja" />);
+
+    const selector = screen.getByTestId("transcription-language-selector");
+    expect(selector).toBeInTheDocument();
+
+    const buttons = selector.querySelectorAll("button");
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAttribute("aria-pressed", "true");
+    expect(buttons[1]).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("switches transcription language when clicking English button in selector", async () => {
+    const user = userEvent.setup();
+    render(<Dashboard initialLanguage="ja" />);
+
+    const selector = screen.getByTestId("transcription-language-selector");
+    const buttons = selector.querySelectorAll("button");
+
+    await user.click(buttons[1]);
+
+    expect(buttons[1]).toHaveAttribute("aria-pressed", "true");
+    expect(buttons[0]).toHaveAttribute("aria-pressed", "false");
   });
 
   it("renders progress bar with partial progress", async () => {

@@ -73,6 +73,8 @@ type BaseCopy = {
   speakerMergeInto: string;
   speakerUnmerge: string;
   speakerMergedFrom: (labels: string) => string;
+  transcriptionLanguageLabel: string;
+  transcriptionLanguageNames: Record<"ja" | "en", string>;
 };
 
 function jaCopy(): BaseCopy {
@@ -172,6 +174,11 @@ function jaCopy(): BaseCopy {
     speakerMergeInto: "ここに統合",
     speakerUnmerge: "統合解除",
     speakerMergedFrom: (labels: string) => `統合元: ${labels}`,
+    transcriptionLanguageLabel: "文字起こし言語",
+    transcriptionLanguageNames: {
+      ja: "日本語",
+      en: "English",
+    },
   };
 }
 
@@ -273,6 +280,11 @@ function enCopy(): BaseCopy {
     speakerMergeInto: "Merge into this",
     speakerUnmerge: "Unmerge",
     speakerMergedFrom: (labels: string) => `Merged from: ${labels}`,
+    transcriptionLanguageLabel: "Transcription language",
+    transcriptionLanguageNames: {
+      ja: "Japanese",
+      en: "English",
+    },
   };
 }
 
