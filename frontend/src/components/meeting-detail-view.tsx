@@ -8,6 +8,7 @@ import {
   MeetingDetail,
   fetchJob,
   fetchMeeting,
+  fetchMeetingMarkdown,
   updateJobTitle,
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
@@ -152,6 +153,18 @@ export function MeetingDetailView({
     URL.revokeObjectURL(url);
   }, [data, jobId]);
 
+  const handleExportMarkdown = useCallback(async () => {
+    const blob = await fetchMeetingMarkdown(jobId);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${jobId}.md`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }, [jobId]);
+
   return (
     <main className="flex min-h-screen flex-col gap-10 bg-slate-950 px-6 py-10 text-white sm:px-12 sm:py-16">
       <header className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -231,14 +244,24 @@ export function MeetingDetailView({
           >
             {copy.meetingBackLink}
           </Link>
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={!data}
-            className="w-fit rounded-lg border border-blue-500 px-4 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
-          >
-            {copy.meetingExportButton}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={!data}
+              className="w-fit rounded-lg border border-blue-500 px-4 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+            >
+              {copy.meetingExportButton}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportMarkdown}
+              disabled={!data}
+              className="w-fit rounded-lg border border-emerald-500 px-4 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+            >
+              {copy.meetingExportMarkdownButton}
+            </button>
+          </div>
         </div>
 
         <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg shadow-slate-950/40">

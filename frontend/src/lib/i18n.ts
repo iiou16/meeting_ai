@@ -47,6 +47,7 @@ type BaseCopy = {
   meetingEmptyAction: string;
   meetingEmptyTranscript: string;
   meetingExportButton: string;
+  meetingExportMarkdownButton: string;
   failedAtStage: (stage: string) => string;
   failureOccurredAt: (time: string) => string;
   titlePlaceholder: string;
@@ -129,6 +130,7 @@ function jaCopy(): BaseCopy {
     meetingEmptyAction: "アクションアイテムは検出されませんでした。",
     meetingEmptyTranscript: "文字起こしが見つかりませんでした。",
     meetingExportButton: "JSONでダウンロード",
+    meetingExportMarkdownButton: "Markdownでダウンロード",
     failedAtStage: (stage: string) =>
       `${stage} で失敗しました`,
     failureOccurredAt: (time: string) => `発生日時: ${time}`,
@@ -214,6 +216,7 @@ function enCopy(): BaseCopy {
     meetingEmptyAction: "No action items detected.",
     meetingEmptyTranscript: "No transcript segments found.",
     meetingExportButton: "Download as JSON",
+    meetingExportMarkdownButton: "Download as Markdown",
     failedAtStage: (stage: string) =>
       `Failed at ${stage}`,
     failureOccurredAt: (time: string) => `Occurred at: ${time}`,

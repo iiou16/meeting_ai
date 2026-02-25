@@ -105,6 +105,17 @@ export async function fetchMeeting(jobId: string): Promise<MeetingDetail> {
   );
 }
 
+export async function fetchMeetingMarkdown(jobId: string): Promise<Blob> {
+  const response = await fetch(
+    `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}/markdown`,
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Request failed with status ${response.status}`);
+  }
+  return response.blob();
+}
+
 export async function deleteJob(jobId: string): Promise<void> {
   const response = await fetch(
     `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}`,

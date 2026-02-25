@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from ..settings import Settings, get_settings
@@ -174,6 +174,37 @@ def delete_meeting(job_id: str, settings: Settings = Depends(get_settings)) -> R
             "failed to delete meeting artefacts",
         ) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{job_id}/markdown")
+def get_meeting_markdown(
+    job_id: str, settings: Settings = Depends(get_settings)
+) -> PlainTextResponse:
+    """Return meeting artefacts rendered as a Markdown document."""
+    from ..job_state import load_job_title
+    from ..markdown import render_meeting_markdown
+
+    job_directory = _resolve_job_directory(settings, job_id)
+
+    title = load_job_title(job_directory)
+    segments = load_transcript_segments(job_directory)
+    summary_items = load_summary_items(job_directory)
+    action_items = load_action_items(job_directory)
+
+    md = render_meeting_markdown(
+        job_id=job_id,
+        title=title,
+        summary_items=summary_items,
+        action_items=action_items,
+        segments=segments,
+    )
+
+    filename = f"{job_id}.md"
+    return PlainTextResponse(
+        content=md,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 __all__ = ["router"]
