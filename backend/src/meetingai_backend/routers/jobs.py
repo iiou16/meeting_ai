@@ -335,7 +335,12 @@ def list_jobs(settings: Settings = Depends(get_settings)) -> list[JobSummary]:
     for directory in _iter_job_directories(settings):
         job_id = directory.name
         jobs.append(_load_job_summary(job_id, directory))
-    return sorted(jobs, key=lambda item: item.updated_at, reverse=True)
+
+    with_recorded = [j for j in jobs if j.recorded_at is not None]
+    without_recorded = [j for j in jobs if j.recorded_at is None]
+    with_recorded.sort(key=lambda item: item.recorded_at, reverse=True)  # type: ignore[arg-type]
+    without_recorded.sort(key=lambda item: item.updated_at, reverse=True)
+    return with_recorded + without_recorded
 
 
 @router.get("/{job_id}", response_model=JobDetail)
