@@ -185,7 +185,7 @@ def split_audio_into_chunks(
     sample_rate: int = 16_000,
     channels: int = 1,
 ) -> list[AudioChunkSpec]:
-    """Split an audio file into smaller MP3 chunks using FFmpeg."""
+    """Split an audio file into smaller WAV chunks using FFmpeg."""
     if chunk_duration_seconds <= 0:
         raise ValueError("chunk_duration_seconds must be greater than zero.")
 

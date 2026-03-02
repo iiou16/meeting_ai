@@ -245,29 +245,41 @@ export function MeetingDetailView({
 
   const handleExport = useCallback(() => {
     if (!data) return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${jobId}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${jobId}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Failed to export JSON:", err);
+      alert(`JSON export failed: ${message}`);
+    }
   }, [data, jobId]);
 
   const handleExportMarkdown = useCallback(async () => {
-    const blob = await fetchMeetingMarkdown(jobId);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${jobId}.md`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = await fetchMeetingMarkdown(jobId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${jobId}.md`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Failed to export markdown:", err);
+      alert(`Markdown export failed: ${message}`);
+    }
   }, [jobId]);
 
   // Speaker profile handlers

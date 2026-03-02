@@ -212,7 +212,7 @@ _SPEAKER_MAPPINGS_FILENAME = "speaker_mappings.json"
 
 @dataclass(slots=True)
 class SpeakerProfile:
-    """A named speaker with an optional organization affiliation."""
+    """A named speaker with an organization affiliation (may be empty)."""
 
     profile_id: str
     name: str
@@ -240,6 +240,13 @@ class SpeakerMappings:
 
     profiles: dict[str, SpeakerProfile]
     label_to_profile: dict[str, str]
+
+    def __post_init__(self) -> None:
+        for label, pid in self.label_to_profile.items():
+            if pid not in self.profiles:
+                raise ValueError(
+                    f"label_to_profile[{label!r}] references unknown profile_id {pid!r}"
+                )
 
     def resolve_label(self, speaker_label: str) -> SpeakerProfile | None:
         """Return the profile for *speaker_label*, or ``None`` if unmapped."""

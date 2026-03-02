@@ -72,9 +72,11 @@ class SummaryItem:
             segment_start_ms=int(payload["segment_start_ms"]),
             segment_end_ms=int(payload["segment_end_ms"]),
             summary_text=str(payload["summary_text"]),
-            heading=str(payload["heading"]) if payload.get("heading") else None,
-            priority=str(payload["priority"]) if payload.get("priority") else None,
-            highlights=list(payload.get("highlights") or []),
+            heading=str(payload["heading"]) if payload["heading"] is not None else None,
+            priority=(
+                str(payload["priority"]) if payload["priority"] is not None else None
+            ),
+            highlights=list(payload["highlights"]),
         )
 
 
@@ -134,18 +136,22 @@ class ActionItem:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ActionItem":
-        segment_start = payload.get("segment_start_ms")
-        segment_end = payload.get("segment_end_ms")
+        segment_start = payload["segment_start_ms"]
+        segment_end = payload["segment_end_ms"]
         return cls(
             action_id=str(payload["action_id"]),
             job_id=str(payload["job_id"]),
             order=int(payload["order"]),
             description=str(payload["description"]),
-            owner=str(payload["owner"]) if payload.get("owner") else None,
-            due_date=str(payload["due_date"]) if payload.get("due_date") else None,
+            owner=str(payload["owner"]) if payload["owner"] is not None else None,
+            due_date=(
+                str(payload["due_date"]) if payload["due_date"] is not None else None
+            ),
             segment_start_ms=int(segment_start) if segment_start is not None else None,
             segment_end_ms=int(segment_end) if segment_end is not None else None,
-            priority=str(payload["priority"]) if payload.get("priority") else None,
+            priority=(
+                str(payload["priority"]) if payload["priority"] is not None else None
+            ),
         )
 
 
@@ -168,8 +174,19 @@ class SummaryQualityMetrics:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "SummaryQualityMetrics":
+        # Support the legacy key name "coverage_ratio" (renamed to
+        # "time_coverage_ratio" in this version).
+        if "time_coverage_ratio" in payload:
+            tcr = float(payload["time_coverage_ratio"])
+        elif "coverage_ratio" in payload:
+            tcr = float(payload["coverage_ratio"])
+        else:
+            raise KeyError(
+                f"Neither 'time_coverage_ratio' nor legacy 'coverage_ratio' found "
+                f"in payload (available keys: {sorted(payload.keys())})"
+            )
         return cls(
-            time_coverage_ratio=float(payload["time_coverage_ratio"]),
+            time_coverage_ratio=tcr,
             referenced_segments_ratio=float(payload["referenced_segments_ratio"]),
             average_summary_word_count=float(payload["average_summary_word_count"]),
             action_item_count=int(payload["action_item_count"]),
