@@ -188,7 +188,6 @@ def generate_meeting_summary(
         segments=segments,
         summary_items=summary_items,
         action_items=action_items,
-        model_metadata=model_metadata,
     )
 
     return SummaryBundle(
@@ -527,15 +526,13 @@ def _evaluate_quality_metrics(
     segments: Sequence[TranscriptSegment],
     summary_items: Sequence[SummaryItem],
     action_items: Sequence[ActionItem],
-    model_metadata: Mapping[str, Any],
 ) -> SummaryQualityMetrics:
     if not segments:
         return SummaryQualityMetrics(
-            coverage_ratio=0.0,
+            time_coverage_ratio=0.0,
             referenced_segments_ratio=0.0,
             average_summary_word_count=0.0,
             action_item_count=len(action_items),
-            llm_confidence=_extract_llm_confidence(model_metadata),
         )
 
     total_duration = max(segment.end_ms for segment in segments) - min(
@@ -561,7 +558,9 @@ def _evaluate_quality_metrics(
             ):
                 referenced_orders.add(segment.order)
 
-    coverage_ratio = _calculate_coverage_ratio(coverage_ranges, total_duration)
+    time_coverage_ratio = _calculate_time_coverage_ratio(
+        coverage_ranges, total_duration
+    )
     referenced_segments_ratio = len(referenced_orders) / len(segments)
 
     average_word_count = (
@@ -572,15 +571,14 @@ def _evaluate_quality_metrics(
     )
 
     return SummaryQualityMetrics(
-        coverage_ratio=round(coverage_ratio, 3),
+        time_coverage_ratio=round(time_coverage_ratio, 3),
         referenced_segments_ratio=round(referenced_segments_ratio, 3),
         average_summary_word_count=round(average_word_count, 2),
         action_item_count=len(action_items),
-        llm_confidence=_extract_llm_confidence(model_metadata),
     )
 
 
-def _calculate_coverage_ratio(
+def _calculate_time_coverage_ratio(
     ranges: Sequence[tuple[int, int]], total_duration: int
 ) -> float:
     if not ranges:
@@ -669,23 +667,6 @@ def _extract_time_value(entry: Mapping[str, Any], keys: Sequence[str]) -> int | 
             coerced = _coerce_milliseconds(entry[key])
             if coerced is not None:
                 return coerced
-    return None
-
-
-def _extract_llm_confidence(metadata: Mapping[str, Any]) -> float | None:
-    quality = metadata.get("quality")
-    if isinstance(quality, Mapping):
-        confidence = quality.get("confidence")
-        if isinstance(confidence, (int, float)):
-            return float(confidence)
-        if isinstance(confidence, str):
-            try:
-                return float(confidence)
-            except ValueError:
-                return None
-    score = metadata.get("confidence")
-    if isinstance(score, (int, float)):
-        return float(score)
     return None
 
 

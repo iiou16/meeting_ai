@@ -25,7 +25,7 @@ def test_extract_audio_invokes_ffmpeg(monkeypatch, tmp_path) -> None:
 
     def fake_run(command, check, capture_output, text):
         issued_commands.append(command)
-        Path(command[-1]).write_bytes(b"mp3-data")
+        Path(command[-1]).write_bytes(b"wav-data")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr("meetingai_backend.media.audio.subprocess.run", fake_run)
@@ -37,11 +37,10 @@ def test_extract_audio_invokes_ffmpeg(monkeypatch, tmp_path) -> None:
     assert issued_commands, "expected ffmpeg to be invoked"
     command = issued_commands[0]
     assert command[0] == "ffmpeg-binary"
-    assert "-b:a" in command
-    assert "64k" in command
-    assert "libmp3lame" in command
+    assert "-b:a" not in command
+    assert "pcm_s16le" in command
     assert result.exists()
-    assert result.read_bytes() == b"mp3-data"
+    assert result.read_bytes() == b"wav-data"
 
 
 def test_extract_audio_missing_ffmpeg(monkeypatch, tmp_path) -> None:
@@ -58,22 +57,22 @@ def test_extract_audio_missing_ffmpeg(monkeypatch, tmp_path) -> None:
 
 def test_extract_audio_output_never_collides_with_input(monkeypatch, tmp_path) -> None:
     """出力ファイル名が入力ファイルと衝突しないことを確認する。"""
-    mp3_input = tmp_path / "recording.mp3"
-    mp3_input.write_bytes(b"fake-mp3-data")
+    wav_input = tmp_path / "recording.wav"
+    wav_input.write_bytes(b"fake-wav-data")
 
     issued_commands: list[list[str]] = []
 
     def fake_run(command, check, capture_output, text):
         issued_commands.append(command)
-        Path(command[-1]).write_bytes(b"mp3-data")
+        Path(command[-1]).write_bytes(b"wav-data")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr("meetingai_backend.media.audio.subprocess.run", fake_run)
 
-    result = extract_audio(mp3_input)
+    result = extract_audio(wav_input)
 
-    assert result != mp3_input, "出力パスが入力パスと同一になっている"
-    assert result.name == "recording_audio.mp3"
+    assert result != wav_input, "出力パスが入力パスと同一になっている"
+    assert result.name == "recording_audio.wav"
     assert result.exists()
 
 
@@ -83,14 +82,14 @@ def test_extract_audio_mp4_output_name(monkeypatch, tmp_path) -> None:
     video.write_bytes(b"fake-video-data")
 
     def fake_run(command, check, capture_output, text):
-        Path(command[-1]).write_bytes(b"mp3-data")
+        Path(command[-1]).write_bytes(b"wav-data")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr("meetingai_backend.media.audio.subprocess.run", fake_run)
 
     result = extract_audio(video)
 
-    assert result.name == "clip_audio.mp3"
+    assert result.name == "clip_audio.wav"
 
 
 def test_extract_audio_failure(monkeypatch, tmp_path) -> None:

@@ -293,6 +293,28 @@ describe("uploadVideo", () => {
     await promise;
   });
 
+  it("includes language in FormData when provided", async () => {
+    const promise = uploadVideo(dummyFile, { language: "en" });
+    const sentData = xhrMock.send.mock.calls[0][0] as FormData;
+    expect(sentData.get("language")).toBe("en");
+
+    xhrMock.status = 200;
+    xhrMock.responseText = '{"job_id":"j1"}';
+    xhrMock.onload!();
+    await promise;
+  });
+
+  it("omits language from FormData when not provided", async () => {
+    const promise = uploadVideo(dummyFile);
+    const sentData = xhrMock.send.mock.calls[0][0] as FormData;
+    expect(sentData.has("language")).toBe(false);
+
+    xhrMock.status = 200;
+    xhrMock.responseText = '{"job_id":"j1"}';
+    xhrMock.onload!();
+    await promise;
+  });
+
   it("rejects on network error", async () => {
     const promise = uploadVideo(dummyFile);
     xhrMock.onerror!();

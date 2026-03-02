@@ -31,7 +31,7 @@ def _common_monkeypatches(monkeypatch, settings, *, creation_time=None):
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == settings.ffmpeg_path
-        destination = path.with_suffix(".mp3")
+        destination = path.with_suffix(".wav")
         destination.write_bytes(b"audio")
         return destination
 
@@ -52,7 +52,7 @@ def _common_monkeypatches(monkeypatch, settings, *, creation_time=None):
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -91,6 +91,7 @@ def _common_monkeypatches(monkeypatch, settings, *, creation_time=None):
     ):
         queued["job_id"] = job_id
         queued["job_directory"] = job_directory
+        queued["language"] = language
 
     monkeypatch.setattr(
         "meetingai_backend.tasks.ingest.get_job_queue",
@@ -110,7 +111,7 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == "ffmpeg-test"
-        destination = path.with_suffix(".mp3")
+        destination = path.with_suffix(".wav")
         destination.write_bytes(b"audio")
         return destination
 
@@ -140,7 +141,7 @@ def test_process_uploaded_video_extracts_audio(monkeypatch, tmp_path) -> None:
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -221,7 +222,7 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
 
     def fake_extract_audio(path: Path, *, config):
         assert config.ffmpeg_path == "ffmpeg-test"
-        destination = path.parent / f"{path.stem}_audio.mp3"
+        destination = path.parent / f"{path.stem}_audio.wav"
         destination.write_bytes(b"audio")
         return destination
 
@@ -251,7 +252,7 @@ def test_process_uploaded_audio_mp3(monkeypatch, tmp_path) -> None:
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -304,7 +305,7 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
     video.write_bytes(b"binary-video")
 
     def fake_extract_audio(path: Path, *, config):
-        destination = path.with_suffix(".mp3")
+        destination = path.with_suffix(".wav")
         destination.write_bytes(b"audio")
         return destination
 
@@ -334,7 +335,7 @@ def test_process_uploaded_video_marks_failed_on_enqueue_error(
         channels: int = 1,
     ):
         output_dir.mkdir(parents=True, exist_ok=True)
-        chunk_path = output_dir / "chunk_0000.mp3"
+        chunk_path = output_dir / "chunk_0000.wav"
         chunk_path.write_bytes(b"chunk-audio")
         chunk_asset = MediaAsset(
             asset_id="chunk-asset",
@@ -435,3 +436,47 @@ def test_process_uploaded_video_no_recorded_at_when_none(monkeypatch, tmp_path) 
 
     assert load_recorded_at(tmp_path) is None
     assert not (tmp_path / "job_recorded_at.json").exists()
+
+
+def test_process_uploaded_video_passes_language_to_transcription(
+    monkeypatch, tmp_path
+) -> None:
+    """language parameter is forwarded to enqueue_transcription_job."""
+    video = tmp_path / "recording.mp4"
+    video.write_bytes(b"binary-video")
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg-test",
+    )
+    set_settings(settings)
+
+    queued = _common_monkeypatches(monkeypatch, settings, creation_time=None)
+
+    process_uploaded_video(job_id="lang-test", source_path=str(video), language="en")
+
+    assert queued["language"] == "en"
+
+
+def test_process_uploaded_video_defaults_language_to_ja(monkeypatch, tmp_path) -> None:
+    """When language is not specified, it defaults to 'ja'."""
+    video = tmp_path / "recording.mp4"
+    video.write_bytes(b"binary-video")
+
+    settings = Settings(
+        upload_root=tmp_path,
+        redis_url="redis://localhost:6379/0",
+        job_queue_name="meetingai:jobs",
+        job_timeout_seconds=900,
+        ffmpeg_path="ffmpeg-test",
+    )
+    set_settings(settings)
+
+    queued = _common_monkeypatches(monkeypatch, settings, creation_time=None)
+
+    process_uploaded_video(job_id="lang-default", source_path=str(video))
+
+    assert queued["language"] == "ja"

@@ -150,4 +150,4 @@ def test_video_upload_to_transcript_segments(tmp_path: Path) -> None:
 
     quality_metrics = load_summary_quality(job_directory)
     assert quality_metrics is not None
-    assert 0.0 <= quality_metrics.coverage_ratio <= 1.0
+    assert 0.0 <= quality_metrics.time_coverage_ratio <= 1.0

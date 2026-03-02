@@ -128,6 +128,6 @@ export const MEETING_FIXTURE: MeetingDetail = {
     },
   ],
   quality_metrics: {
-    coverage_ratio: 0.9,
+    time_coverage_ratio: 0.9,
   },
 };

@@ -10,6 +10,8 @@ from rq import Queue
 
 from .settings import Settings
 
+SUPPORTED_LANGUAGES: tuple[str, ...] = ("ja", "en")
+
 _JOB_QUEUE: JobQueueProtocol | None = None
 
 
@@ -63,11 +65,16 @@ def enqueue_video_ingest_job(
     queue: JobQueueProtocol,
     job_id: str,
     source_path: str,
+    language: str = "ja",
 ) -> Any:
     """Schedule the initial media file processing task (video or audio)."""
+    if language not in SUPPORTED_LANGUAGES:
+        raise ValueError(
+            f"Unsupported language: {language!r}. Must be one of {SUPPORTED_LANGUAGES}"
+        )
     return queue.enqueue(
         "meetingai_backend.tasks.ingest.process_uploaded_video",
-        kwargs={"job_id": job_id, "source_path": source_path},
+        kwargs={"job_id": job_id, "source_path": source_path, "language": language},
     )
 
 
@@ -109,6 +116,7 @@ def enqueue_summary_job(
 __all__ = [
     "JobQueueProtocol",
     "RedisJobQueue",
+    "SUPPORTED_LANGUAGES",
     "enqueue_transcription_job",
     "enqueue_summary_job",
     "enqueue_video_ingest_job",

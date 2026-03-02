@@ -40,7 +40,7 @@ def _prepare_job_directory(tmp_path: Path) -> tuple[Path, MediaAsset, MediaAsset
         extra={},
     )
 
-    chunk_path = chunk_dir / "chunk_0000.mp3"
+    chunk_path = chunk_dir / "chunk_0000.wav"
     chunk_path.write_bytes(b"audio")
     chunk_asset = MediaAsset(
         asset_id="chunk-asset",

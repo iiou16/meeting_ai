@@ -83,12 +83,24 @@ export interface TranscriptSegment {
   speaker_label?: string | null;
 }
 
+export interface SpeakerProfile {
+  profile_id: string;
+  name: string;
+  organization: string;
+}
+
+export interface SpeakerMappings {
+  profiles: Record<string, SpeakerProfile>;
+  label_to_profile: Record<string, string>;
+}
+
 export interface MeetingDetail {
   job_id: string;
   summary_items: SummaryItem[];
   action_items: ActionItem[];
   segments: TranscriptSegment[];
   quality_metrics?: Record<string, unknown> | null;
+  speaker_mappings?: SpeakerMappings | null;
 }
 
 export async function fetchJobs(): Promise<JobSummary[]> {
@@ -102,6 +114,31 @@ export async function fetchJob(jobId: string): Promise<JobDetail> {
 export async function fetchMeeting(jobId: string): Promise<MeetingDetail> {
   return requestJson<MeetingDetail>(
     `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}`,
+  );
+}
+
+export async function fetchMeetingMarkdown(jobId: string): Promise<Blob> {
+  const response = await fetch(
+    `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}/markdown`,
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Request failed with status ${response.status}`);
+  }
+  return response.blob();
+}
+
+export async function updateSpeakerMappings(
+  jobId: string,
+  mappings: SpeakerMappings,
+): Promise<SpeakerMappings> {
+  return requestJson<SpeakerMappings>(
+    `${API_BASE}/api/meetings/${encodeURIComponent(jobId)}/speakers`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(mappings),
+    },
   );
 }
 
@@ -145,6 +182,7 @@ export async function updateJobRecordedAt(
 }
 
 type UploadOptions = {
+  language?: "ja" | "en";
   onProgress?: (percentage: number) => void;
   signal?: AbortSignal;
 };
@@ -153,12 +191,15 @@ export function uploadVideo(
   file: File,
   options: UploadOptions = {},
 ): Promise<UploadResponse> {
-  const { onProgress, signal } = options;
+  const { language, onProgress, signal } = options;
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const formData = new FormData();
     formData.append("file", file);
+    if (language !== undefined) {
+      formData.append("language", language);
+    }
 
     xhr.open("POST", `${API_BASE}/api/videos`, true);
 

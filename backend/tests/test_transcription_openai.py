@@ -43,8 +43,8 @@ def _make_chunk_asset(tmp_path: Path, *, name: str, order: int) -> MediaAsset:
 
 def test_transcribe_audio_chunks_success(tmp_path) -> None:
     assets = [
-        _make_chunk_asset(tmp_path, name="chunk-0.mp3", order=0),
-        _make_chunk_asset(tmp_path, name="chunk-1.mp3", order=1),
+        _make_chunk_asset(tmp_path, name="chunk-0.wav", order=0),
+        _make_chunk_asset(tmp_path, name="chunk-1.wav", order=1),
     ]
 
     calls: list[Path] = []
@@ -64,15 +64,15 @@ def test_transcribe_audio_chunks_success(tmp_path) -> None:
 
     assert isinstance(results[0], ChunkTranscriptionResult)
     assert [result.text for result in results] == [
-        "transcribed-chunk-0.mp3",
-        "transcribed-chunk-1.mp3",
+        "transcribed-chunk-0.wav",
+        "transcribed-chunk-1.wav",
     ]
 
 
 def test_transcribe_audio_chunks_retries_on_retriable_error(
     monkeypatch, tmp_path
 ) -> None:
-    asset = _make_chunk_asset(tmp_path, name="chunk-0.mp3", order=0)
+    asset = _make_chunk_asset(tmp_path, name="chunk-0.wav", order=0)
     request = httpx.Request("POST", "https://api.openai.com/v1/audio/transcriptions")
     response = httpx.Response(429, request=request, headers={"Retry-After": "2"})
     error = httpx.HTTPStatusError("rate limited", request=request, response=response)
@@ -111,7 +111,7 @@ def test_transcribe_audio_chunks_retries_on_retriable_error(
 
 
 def test_transcribe_audio_chunks_raises_after_max_attempts(tmp_path) -> None:
-    asset = _make_chunk_asset(tmp_path, name="chunk-0.mp3", order=0)
+    asset = _make_chunk_asset(tmp_path, name="chunk-0.wav", order=0)
     request = httpx.Request("POST", "https://api.openai.com/v1/audio/transcriptions")
 
     def request_fn(*, file_path: Path, config, language, prompt):
@@ -143,8 +143,8 @@ def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> N
     monkeypatch.setattr(module.time, "monotonic", fake_monotonic)
 
     assets = [
-        _make_chunk_asset(tmp_path, name="chunk-0.mp3", order=0),
-        _make_chunk_asset(tmp_path, name="chunk-1.mp3", order=1),
+        _make_chunk_asset(tmp_path, name="chunk-0.wav", order=0),
+        _make_chunk_asset(tmp_path, name="chunk-1.wav", order=1),
     ]
 
     sleep_calls: list[float] = []
@@ -177,7 +177,7 @@ class TestConcurrentExecution:
     def test_chunks_run_concurrently(self, tmp_path: Path) -> None:
         """max_concurrent_requests=3 で3チャンクが並行して処理されることを確認。"""
         assets = [
-            _make_chunk_asset(tmp_path, name=f"chunk-{i}.mp3", order=i)
+            _make_chunk_asset(tmp_path, name=f"chunk-{i}.wav", order=i)
             for i in range(3)
         ]
 
@@ -201,15 +201,15 @@ class TestConcurrentExecution:
 
         assert len(results) == 3
         assert [r.text for r in results] == [
-            "transcribed-chunk-0.mp3",
-            "transcribed-chunk-1.mp3",
-            "transcribed-chunk-2.mp3",
+            "transcribed-chunk-0.wav",
+            "transcribed-chunk-1.wav",
+            "transcribed-chunk-2.wav",
         ]
 
     def test_results_ordered_by_chunk_index(self, tmp_path: Path) -> None:
         """並列実行しても結果がチャンク順序で返されることを確認。"""
         assets = [
-            _make_chunk_asset(tmp_path, name=f"chunk-{i}.mp3", order=i)
+            _make_chunk_asset(tmp_path, name=f"chunk-{i}.wav", order=i)
             for i in range(4)
         ]
 
@@ -243,7 +243,7 @@ class TestConcurrentExecution:
     def test_error_in_one_chunk_propagates(self, tmp_path: Path) -> None:
         """1チャンクがエラーを投げた場合、TranscriptionError が伝搬されることを確認。"""
         assets = [
-            _make_chunk_asset(tmp_path, name=f"chunk-{i}.mp3", order=i)
+            _make_chunk_asset(tmp_path, name=f"chunk-{i}.wav", order=i)
             for i in range(3)
         ]
 

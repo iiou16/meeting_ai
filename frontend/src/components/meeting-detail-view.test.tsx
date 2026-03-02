@@ -1,14 +1,23 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { fetchMeeting, fetchJob, updateJobTitle } from "../lib/api";
+import {
+  fetchMeeting,
+  fetchMeetingMarkdown,
+  fetchJob,
+  updateJobTitle,
+} from "../lib/api";
 import { MeetingDetailView } from "./meeting-detail-view";
+
+global.URL.createObjectURL = jest.fn(() => "blob:mock-url");
+global.URL.revokeObjectURL = jest.fn();
 
 jest.mock("../lib/api", () => {
   const actual = jest.requireActual("../lib/api");
   return {
     ...actual,
     fetchMeeting: jest.fn(),
+    fetchMeetingMarkdown: jest.fn(),
     fetchJob: jest.fn(),
     updateJobTitle: jest.fn(),
   };
@@ -16,6 +25,9 @@ jest.mock("../lib/api", () => {
 
 const mockedFetchMeeting = fetchMeeting as jest.MockedFunction<
   typeof fetchMeeting
+>;
+const mockedFetchMeetingMarkdown = fetchMeetingMarkdown as jest.MockedFunction<
+  typeof fetchMeetingMarkdown
 >;
 const mockedFetchJob = fetchJob as jest.MockedFunction<typeof fetchJob>;
 const mockedUpdateJobTitle = updateJobTitle as jest.MockedFunction<
@@ -63,7 +75,7 @@ const MEETING_FIXTURE = {
     },
   ],
   quality_metrics: {
-    coverage_ratio: 0.9,
+    time_coverage_ratio: 0.9,
   },
 };
 
@@ -86,11 +98,13 @@ const JOB_DETAIL_FIXTURE = {
 describe("MeetingDetailView", () => {
   beforeEach(() => {
     mockedFetchMeeting.mockResolvedValue(MEETING_FIXTURE);
+    mockedFetchMeetingMarkdown.mockResolvedValue(new Blob(["# Test"], { type: "text/markdown" }));
     mockedFetchJob.mockResolvedValue(JOB_DETAIL_FIXTURE);
   });
 
   afterEach(() => {
     mockedFetchMeeting.mockReset();
+    mockedFetchMeetingMarkdown.mockReset();
     mockedFetchJob.mockReset();
     mockedUpdateJobTitle.mockReset();
   });
@@ -160,6 +174,37 @@ describe("MeetingDetailView", () => {
     expect(screen.getByTestId("detail-title-display")).toHaveTextContent(
       "タイトルを入力...",
     );
+  });
+
+  it("renders markdown export button", async () => {
+    render(
+      <MeetingDetailView jobId="job-777" initialLanguage="ja" />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/会議のゴールを確認しました。/)).toBeInTheDocument(),
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Markdownでダウンロード/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("calls fetchMeetingMarkdown when markdown button is clicked", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MeetingDetailView jobId="job-777" initialLanguage="ja" />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/会議のゴールを確認しました。/)).toBeInTheDocument(),
+    );
+
+    const mdButton = screen.getByRole("button", { name: /Markdownでダウンロード/ });
+    await user.click(mdButton);
+
+    expect(mockedFetchMeetingMarkdown).toHaveBeenCalledWith("job-777");
   });
 
   it("allows inline title editing via click and Enter", async () => {

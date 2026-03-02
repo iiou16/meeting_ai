@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from ..jobs import JobQueueProtocol, enqueue_video_ingest_job, get_job_queue
 from ..settings import Settings, get_settings
@@ -37,6 +38,7 @@ async def _persist_upload(file: UploadFile, destination: Path) -> None:
 
 async def upload_video(
     file: UploadFile = File(...),
+    language: Literal["ja", "en"] = Form("ja"),
     settings: Settings = Depends(get_settings),
     job_queue: JobQueueProtocol = Depends(_get_job_queue),
 ) -> dict[str, str]:
@@ -78,6 +80,7 @@ async def upload_video(
         queue=job_queue,
         job_id=str(job_id),
         source_path=str(destination_path),
+        language=language,
     )
 
     return {"job_id": str(job_id)}
