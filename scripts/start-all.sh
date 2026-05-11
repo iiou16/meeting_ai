@@ -70,4 +70,7 @@ echo "  Ctrl+C で全プロセスを停止します"
 echo ""
 
 # どちらかのプロセスが終了したらスクリプトを終了する
-wait -n "${BACKEND_PID}" "${FRONTEND_PID}"
+# (macOS の bash 3.2 は `wait -n` をサポートしないためポーリングで実装)
+while kill -0 "${BACKEND_PID}" 2>/dev/null && kill -0 "${FRONTEND_PID}" 2>/dev/null; do
+  sleep 2
+done
