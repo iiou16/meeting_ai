@@ -9,6 +9,10 @@ ROOT_DIR="$(pwd)"
 LOG_DIR="${ROOT_DIR}/tmp/logs"
 mkdir -p "${LOG_DIR}"
 
+# job control を有効化してバックグラウンドジョブごとに別プロセスグループを作る
+# (setsid 相当の挙動。macOS には setsid が無いためこちらを使う)
+set -m
+
 BACKEND_LOG="${LOG_DIR}/backend.log"
 FRONTEND_LOG="${LOG_DIR}/frontend.log"
 
@@ -31,8 +35,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "[start-all] Backend を起動します (ログ: ${BACKEND_LOG})"
-# setsid でプロセスグループを分離し、ログをファイルと標準出力の両方に流す
-( setsid "${ROOT_DIR}/scripts/start-backend.sh" 2>&1 | sed -u 's/^/[backend] /' | tee "${BACKEND_LOG}" ) &
+# ログをファイルと標準出力の両方に流す
+( "${ROOT_DIR}/scripts/start-backend.sh" 2>&1 | sed -u 's/^/[backend] /' | tee "${BACKEND_LOG}" ) &
 BACKEND_PID=$!
 
 # Backend (uvicorn) が応答するまで待機
@@ -55,7 +59,7 @@ for i in $(seq 1 60); do
 done
 
 echo "[start-all] Frontend を起動します (ログ: ${FRONTEND_LOG})"
-( setsid "${ROOT_DIR}/scripts/start-frontend.sh" 2>&1 | sed -u 's/^/[frontend] /' | tee "${FRONTEND_LOG}" ) &
+( "${ROOT_DIR}/scripts/start-frontend.sh" 2>&1 | sed -u 's/^/[frontend] /' | tee "${FRONTEND_LOG}" ) &
 FRONTEND_PID=$!
 
 echo ""
