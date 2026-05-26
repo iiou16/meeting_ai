@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
+from ..job_state import save_job_language, save_source_path
 from ..jobs import JobQueueProtocol, enqueue_video_ingest_job, get_job_queue
 from ..settings import Settings, get_settings
 
@@ -76,6 +77,8 @@ async def upload_video(
     destination_path = destination_dir / sanitized_name
 
     await _persist_upload(file, destination_path)
+    save_job_language(destination_dir, language=language)
+    save_source_path(destination_dir, source_path=destination_path)
     enqueue_video_ingest_job(
         queue=job_queue,
         job_id=str(job_id),

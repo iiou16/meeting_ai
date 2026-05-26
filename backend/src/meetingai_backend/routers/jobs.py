@@ -35,6 +35,16 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
+
+class JobRetryRequest(BaseModel):
+    """Optional override for the language when retrying a job."""
+
+    language: str | None = Field(
+        default=None,
+        description="Override transcription language (ja/en). Required when not stored on disk.",
+    )
+
+
 _STAGES = (
     JOB_STAGE_UPLOAD,
     JOB_STAGE_CHUNKING,
@@ -369,11 +379,141 @@ def update_job(
     return _load_job_detail(job_id, job_directory)
 
 
+@router.post(
+    "/{job_id}/retry",
+    response_model=JobDetail,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_job(
+    job_id: str,
+    body: JobRetryRequest | None = None,
+    settings: Settings = Depends(get_settings),
+) -> JobDetail:
+    """Re-enqueue a failed job at the stage where it failed."""
+    from ..job_state import (
+        consume_job_failure,
+        load_job_language,
+        load_source_path,
+        restore_job_failure,
+    )
+    from ..jobs import (
+        SUPPORTED_LANGUAGES,
+        enqueue_summary_job,
+        enqueue_transcription_job,
+        enqueue_video_ingest_job,
+        get_job_queue,
+    )
+
+    job_directory = settings.upload_root / job_id
+    if not job_directory.exists():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "job not found")
+
+    # Validate the request body up-front so we never claim the failure marker
+    # for an invalid request (which would leave the job in an "abandoned"
+    # state — neither failed nor queued).
+    if body is None:
+        requested_language: str | None = None
+    else:
+        requested_language = body.language
+    if requested_language is not None and requested_language not in SUPPORTED_LANGUAGES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"unsupported language: {requested_language!r}; "
+            f"must be one of {list(SUPPORTED_LANGUAGES)}",
+        )
+
+    # Atomically claim the failure marker so concurrent retry requests cannot
+    # both proceed.  The loser of the race receives ``None`` and is told the
+    # job is no longer failed (409).
+    failure = consume_job_failure(job_directory)
+    if failure is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "job is not in a failed state; retry is only allowed for failed jobs",
+        )
+
+    try:
+        stage = failure.stage
+        if stage not in _STAGE_INDEX:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"unknown failure stage on disk: {stage!r}",
+            )
+
+        if requested_language is None:
+            language = load_job_language(job_directory)
+        else:
+            language = requested_language
+
+        if stage in (
+            JOB_STAGE_UPLOAD,
+            JOB_STAGE_CHUNKING,
+            JOB_STAGE_TRANSCRIPTION,
+        ):
+            if language is None:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "language is required to retry this job but is not stored on disk; "
+                    "provide it in the request body",
+                )
+
+        queue = get_job_queue(settings)
+
+        if stage in (JOB_STAGE_UPLOAD, JOB_STAGE_CHUNKING):
+            source_path = load_source_path(job_directory)
+            if source_path is None:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "original source path is not recorded for this job; "
+                    "re-upload the file to retry from this stage",
+                )
+            enqueue_video_ingest_job(
+                queue=queue,
+                job_id=job_id,
+                source_path=str(source_path),
+                language=language,
+            )
+        elif stage == JOB_STAGE_TRANSCRIPTION:
+            enqueue_transcription_job(
+                queue=queue,
+                job_id=job_id,
+                job_directory=str(job_directory),
+                language=language,
+            )
+        elif stage == JOB_STAGE_SUMMARY:
+            enqueue_summary_job(
+                queue=queue,
+                job_id=job_id,
+                job_directory=str(job_directory),
+            )
+        else:
+            # Defensive: _STAGE_INDEX check above should make this unreachable.
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                f"retry not implemented for stage {stage!r}",
+            )
+    except BaseException:
+        # Anything that prevents the re-enqueue (validation error, queue
+        # failure, etc.) leaves the job in a failed state again — restore the
+        # marker we consumed so the user can retry once the issue is fixed.
+        restore_job_failure(job_directory, record=failure)
+        raise
+
+    logger.info(
+        "Re-enqueued failed job %s at stage %s (language=%s)",
+        job_id,
+        stage,
+        language,
+    )
+    return _load_job_detail(job_id, job_directory)
+
+
 __all__ = [
     "router",
     "JobStatus",
     "JobSummary",
     "JobDetail",
     "JobFailure",
+    "JobRetryRequest",
     "JobUpdate",
 ]

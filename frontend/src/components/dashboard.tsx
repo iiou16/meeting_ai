@@ -9,12 +9,13 @@ import {
   fetchJobs,
   uploadVideo,
   deleteJob,
+  retryJob,
   updateJobTitle,
   updateJobRecordedAt,
 } from "../lib/api";
 import { Language, getCopy } from "../lib/i18n";
 
-const MAX_FILE_SIZE_MB = 1024;
+const MAX_FILE_SIZE_MB = 2048;
 const REFRESH_INTERVAL_MS = 10000;
 
 type UploadState = "idle" | "uploading" | "success" | "error";
@@ -75,6 +76,7 @@ export default function Dashboard({
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [notificationType, setNotificationType] = useState<"success" | "error" | null>(null);
   const [editingTitleJobId, setEditingTitleJobId] = useState<string | null>(null);
@@ -199,6 +201,54 @@ export default function Dashboard({
       setNotificationType("error");
     } finally {
       setDeletingJobId(null);
+    }
+  };
+
+  const promptForRetryLanguage = (): "ja" | "en" | null => {
+    const raw = window.prompt(copy.retryLanguagePrompt, "ja");
+    if (raw === null) return null;
+    const trimmed = raw.trim().toLowerCase();
+    if (trimmed === "ja" || trimmed === "en") return trimmed;
+    window.alert(copy.retryLanguageInvalid);
+    return null;
+  };
+
+  const handleRetryJob = async (jobId: string) => {
+    if (!window.confirm(copy.retryConfirm(jobId))) {
+      return;
+    }
+
+    setRetryingJobId(jobId);
+    setNotification(null);
+    setNotificationType(null);
+
+    try {
+      try {
+        await retryJob(jobId, {});
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "unknown error";
+        // Backend returns 400 with "language is required" when job_language.json
+        // is missing on disk (legacy job). Ask the user for the language.
+        if (message.includes("language is required")) {
+          const language = promptForRetryLanguage();
+          if (language === null) {
+            return;
+          }
+          await retryJob(jobId, { language });
+        } else {
+          throw error;
+        }
+      }
+      setNotification(copy.retrySuccess);
+      setNotificationType("success");
+      await loadJobs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      setNotification(copy.retryError + message);
+      setNotificationType("error");
+    } finally {
+      setRetryingJobId(null);
     }
   };
 
@@ -645,6 +695,20 @@ export default function Dashboard({
                           >
                             {copy.viewDetails}
                           </Link>
+                          {job.status === "failed" && (
+                            <button
+                              type="button"
+                              onClick={() => handleRetryJob(job.job_id)}
+                              disabled={retryingJobId === job.job_id}
+                              className="rounded-lg border border-amber-500 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+                              title={copy.retryButton}
+                              data-testid="retry-button"
+                            >
+                              {retryingJobId === job.job_id
+                                ? copy.retryInProgress
+                                : copy.retryButton}
+                            </button>
+                          )}
                           {job.can_delete && (
                             <button
                               type="button"
