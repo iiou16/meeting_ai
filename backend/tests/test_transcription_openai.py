@@ -129,6 +129,53 @@ def test_transcribe_audio_chunks_raises_after_max_attempts(tmp_path) -> None:
     err = exc_info.value
     assert err.asset_id == asset.asset_id
     assert "network" in str(err.__cause__)
+    assert "chunk 1/1" in str(err)
+    assert "chunk-0.wav" in str(err)
+    assert "attempt 2/2" in str(err)
+
+
+def test_transcribe_audio_chunks_status_error_identifies_chunk(
+    tmp_path, caplog
+) -> None:
+    assets = [
+        _make_chunk_asset(tmp_path, name=f"chunk-{i}.wav", order=i) for i in range(3)
+    ]
+    request = httpx.Request("POST", "https://api.openai.com/v1/audio/transcriptions")
+
+    def request_fn(*, file_path: Path, config, language, prompt):
+        if file_path.name == "chunk-2.wav":
+            response = httpx.Response(500, text="server exploded", request=request)
+            raise httpx.HTTPStatusError(
+                "server error", request=request, response=response
+            )
+        return {"text": "ok", "language": "ja"}
+
+    config = OpenAITranscriptionConfig(api_key="test-key", max_attempts=2)
+
+    with caplog.at_level("WARNING", logger="meetingai_backend.transcription.openai"):
+        with pytest.raises(TranscriptionError) as exc_info:
+            transcribe_audio_chunks(
+                assets,
+                config=config,
+                request_fn=request_fn,  # type: ignore[arg-type]
+                sleep=lambda _: None,
+            )
+
+    message = str(exc_info.value)
+    assert exc_info.value.asset_id == "asset-2"
+    assert exc_info.value.status_code == 500
+    assert "chunk 3/3" in message
+    assert "asset=asset-2" in message
+    assert "chunk-2.wav" in message
+    assert "range=2000-3000ms" in message
+    assert "attempt 2/2" in message
+    assert "server exploded" in message
+
+    retry_logs = [r.getMessage() for r in caplog.records]
+    assert any(
+        "chunk 3/3" in m and "status 500" in m and "attempt 1/2" in m
+        for m in retry_logs
+    )
 
 
 def test_transcribe_audio_chunks_rate_limit_enforced(monkeypatch, tmp_path) -> None:
