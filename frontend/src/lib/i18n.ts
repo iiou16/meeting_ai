@@ -50,6 +50,8 @@ type BaseCopy = {
   meetingExportMarkdownButton: string;
   failedAtStage: (stage: string) => string;
   failureOccurredAt: (time: string) => string;
+  failureMessageExpand: string;
+  failureMessageCollapse: string;
   titlePlaceholder: string;
   titleEditLabel: string;
   titleSaveSuccess: string;
@@ -158,6 +160,8 @@ function jaCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `${stage} で失敗しました`,
     failureOccurredAt: (time: string) => `発生日時: ${time}`,
+    failureMessageExpand: "全文を表示",
+    failureMessageCollapse: "折りたたむ",
     titlePlaceholder: "タイトルを入力...",
     titleEditLabel: "タイトルを編集",
     titleSaveSuccess: "タイトルを保存しました。",
@@ -272,6 +276,8 @@ function enCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `Failed at ${stage}`,
     failureOccurredAt: (time: string) => `Occurred at: ${time}`,
+    failureMessageExpand: "Show full message",
+    failureMessageCollapse: "Collapse",
     titlePlaceholder: "Enter title...",
     titleEditLabel: "Edit title",
     titleSaveSuccess: "Title saved successfully.",

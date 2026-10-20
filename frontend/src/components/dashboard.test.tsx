@@ -270,6 +270,72 @@ describe("Dashboard component", () => {
     expect(screen.queryByTestId("failure-time")).not.toBeInTheDocument();
   });
 
+  it("toggles full failure message when clicking the toggle button", async () => {
+    const user = userEvent.setup();
+    const failureMessage =
+      'transcription failed with status 400: {\n    "error": {\n        "message": "something went wrong reading your request"\n    }\n}';
+    const failedJobs = [
+      {
+        job_id: "job-failed-long",
+        status: "failed",
+        created_at: "2025-05-25T10:00:00Z",
+        updated_at: "2025-05-25T10:30:00Z",
+        recorded_at: null,
+        progress: 0.5,
+        stage_index: 2,
+        stage_count: 4,
+        stage_key: "transcription",
+        duration_ms: null,
+        languages: [],
+        summary_count: 0,
+        action_item_count: 0,
+        can_delete: true,
+        failure: {
+          stage: "transcription",
+          message: failureMessage,
+          occurred_at: "2025-05-25T10:30:00Z",
+        },
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockImplementation(
+      (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        const method = init?.method ?? "GET";
+        if (url.includes("/api/jobs") && method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(failedJobs),
+          } as Response);
+        }
+        return Promise.reject(
+          new Error(`Unexpected fetch call ${method} ${url}`),
+        );
+      },
+    );
+
+    render(<Dashboard initialLanguage="ja" />);
+
+    const toggle = await screen.findByTestId("failure-message-toggle");
+    const message = screen.getByTestId("failure-message");
+    expect(message).toHaveClass("line-clamp-2");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveTextContent("全文を表示");
+
+    await user.click(toggle);
+
+    expect(message).not.toHaveClass("line-clamp-2");
+    expect(message).toHaveClass("whitespace-pre-wrap");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveTextContent("折りたたむ");
+
+    await user.click(toggle);
+
+    expect(message).toHaveClass("line-clamp-2");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("renders transcription language selector with default ja selected", async () => {
     render(<Dashboard initialLanguage="ja" />);
 

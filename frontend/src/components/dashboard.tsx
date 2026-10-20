@@ -77,6 +77,7 @@ export default function Dashboard({
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [expandedFailureJobId, setExpandedFailureJobId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [notificationType, setNotificationType] = useState<"success" | "error" | null>(null);
   const [editingTitleJobId, setEditingTitleJobId] = useState<string | null>(null);
@@ -671,11 +672,30 @@ export default function Dashboard({
                                 )}
                               </span>
                               <span
-                                className="line-clamp-2 text-xs text-red-400/80"
+                                className={`text-xs text-red-400/80 ${
+                                  expandedFailureJobId === job.job_id
+                                    ? "max-h-60 overflow-y-auto whitespace-pre-wrap break-all"
+                                    : "line-clamp-2"
+                                }`}
                                 data-testid="failure-message"
                               >
                                 {job.failure.message}
                               </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedFailureJobId((current) =>
+                                    current === job.job_id ? null : job.job_id,
+                                  )
+                                }
+                                className="w-fit text-xs text-red-300 underline hover:text-red-200"
+                                aria-expanded={expandedFailureJobId === job.job_id}
+                                data-testid="failure-message-toggle"
+                              >
+                                {expandedFailureJobId === job.job_id
+                                  ? copy.failureMessageCollapse
+                                  : copy.failureMessageExpand}
+                              </button>
                             </>
                           ) : job.status !== "completed" ? (
                             <span className="text-xs text-slate-400">
