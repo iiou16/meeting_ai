@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,8 @@ JOB_STAGE_SUMMARY = "summary"
 _FAILURE_FILENAME = "job_failed.json"
 _TITLE_FILENAME = "job_title.json"
 _RECORDED_AT_FILENAME = "job_recorded_at.json"
+_LANGUAGE_FILENAME = "job_language.json"
+_SOURCE_PATH_FILENAME = "job_source.json"
 
 
 @dataclass(slots=True)
@@ -96,6 +100,46 @@ def clear_job_failure(job_directory: Path) -> None:
     path = job_directory / _FAILURE_FILENAME
     if path.exists():
         path.unlink()
+
+
+def consume_job_failure(job_directory: Path) -> JobFailureRecord | None:
+    """Atomically claim and remove the failure marker for the job.
+
+    Returns the parsed :class:`JobFailureRecord` if this call successfully
+    claimed the marker, otherwise ``None``.  When multiple callers race for
+    the same job, only one will receive the record; the rest get ``None``.
+
+    Use :func:`restore_job_failure` to put the marker back if the work that
+    consumed it cannot proceed.
+    """
+
+    source = job_directory / _FAILURE_FILENAME
+    claim_path = job_directory / f"{_FAILURE_FILENAME}.claim-{uuid4().hex}"
+    try:
+        os.rename(source, claim_path)
+    except FileNotFoundError:
+        return None
+
+    try:
+        payload = json.loads(claim_path.read_text(encoding="utf-8"))
+    finally:
+        claim_path.unlink(missing_ok=True)
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected dict in {source}, got {type(payload).__name__}")
+    return JobFailureRecord.from_dict(payload)
+
+
+def restore_job_failure(job_directory: Path, *, record: JobFailureRecord) -> Path:
+    """Restore a previously consumed failure marker (preserves occurred_at)."""
+
+    job_directory.mkdir(parents=True, exist_ok=True)
+    path = job_directory / _FAILURE_FILENAME
+    path.write_text(
+        json.dumps(record.to_dict(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return path
 
 
 def load_job_failure(job_directory: Path) -> JobFailureRecord | None:
@@ -179,6 +223,80 @@ def save_recorded_at(job_directory: Path, *, recorded_at: datetime) -> Path:
         Path(fd.name).unlink(missing_ok=True)
         raise
     return path
+
+
+def save_job_language(job_directory: Path, *, language: str) -> Path:
+    """Persist the transcription language chosen at upload time (atomic write)."""
+    job_directory.mkdir(parents=True, exist_ok=True)
+    path = job_directory / _LANGUAGE_FILENAME
+    content = json.dumps({"language": language}, ensure_ascii=False, indent=2)
+    fd = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=job_directory,
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        fd.write(content)
+        fd.flush()
+        fd.close()
+        Path(fd.name).replace(path)
+    except BaseException:
+        Path(fd.name).unlink(missing_ok=True)
+        raise
+    return path
+
+
+def save_source_path(job_directory: Path, *, source_path: Path) -> Path:
+    """Persist the absolute path of the originally uploaded media file."""
+    job_directory.mkdir(parents=True, exist_ok=True)
+    path = job_directory / _SOURCE_PATH_FILENAME
+    content = json.dumps(
+        {"source_path": str(source_path.resolve())},
+        ensure_ascii=False,
+        indent=2,
+    )
+    fd = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=job_directory,
+        suffix=".tmp",
+        delete=False,
+    )
+    try:
+        fd.write(content)
+        fd.flush()
+        fd.close()
+        Path(fd.name).replace(path)
+    except BaseException:
+        Path(fd.name).unlink(missing_ok=True)
+        raise
+    return path
+
+
+def load_source_path(job_directory: Path) -> Path | None:
+    """Return the persisted source media path, or ``None`` if not set."""
+    path = job_directory / _SOURCE_PATH_FILENAME
+    if not path.exists():
+        return None
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected dict in {path}, got {type(payload).__name__}")
+    return Path(payload["source_path"])
+
+
+def load_job_language(job_directory: Path) -> str | None:
+    """Return the persisted transcription language, or ``None`` if not set."""
+    path = job_directory / _LANGUAGE_FILENAME
+    if not path.exists():
+        return None
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected dict in {path}, got {type(payload).__name__}")
+    return str(payload["language"])
 
 
 def load_recorded_at(job_directory: Path) -> datetime | None:
@@ -334,12 +452,18 @@ __all__ = [
     "SpeakerMappings",
     "SpeakerProfile",
     "clear_job_failure",
+    "consume_job_failure",
     "load_job_failure",
+    "load_job_language",
     "load_job_title",
     "load_recorded_at",
+    "load_source_path",
     "load_speaker_mappings",
     "mark_job_failed",
+    "restore_job_failure",
+    "save_job_language",
     "save_job_title",
     "save_recorded_at",
+    "save_source_path",
     "save_speaker_mappings",
 ]

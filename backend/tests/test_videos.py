@@ -61,9 +61,9 @@ async def test_upload_video_persists_file_and_returns_job_id(
     stored_dir = upload_root / job_id
     assert stored_dir.exists(), f"expected upload directory {stored_dir} to exist"
 
-    stored_files = list(stored_dir.iterdir())
-    assert stored_files, "expected uploaded file to be saved to disk"
-    assert stored_files[0].read_bytes() == b"sample-bytes"
+    media_file = stored_dir / "meeting.mp4"
+    assert media_file.exists(), "expected uploaded media file to be saved to disk"
+    assert media_file.read_bytes() == b"sample-bytes"
 
 
 @pytest.mark.asyncio

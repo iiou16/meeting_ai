@@ -181,6 +181,24 @@ export async function updateJobRecordedAt(
   );
 }
 
+export async function retryJob(
+  jobId: string,
+  options: { language?: "ja" | "en" },
+): Promise<JobDetail> {
+  const body: Record<string, string> = {};
+  if (options.language !== undefined) {
+    body.language = options.language;
+  }
+  return requestJson<JobDetail>(
+    `${API_BASE}/api/jobs/${encodeURIComponent(jobId)}/retry`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
 type UploadOptions = {
   language?: "ja" | "en";
   onProgress?: (percentage: number) => void;

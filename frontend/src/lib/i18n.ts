@@ -50,6 +50,8 @@ type BaseCopy = {
   meetingExportMarkdownButton: string;
   failedAtStage: (stage: string) => string;
   failureOccurredAt: (time: string) => string;
+  failureMessageExpand: string;
+  failureMessageCollapse: string;
   titlePlaceholder: string;
   titleEditLabel: string;
   titleSaveSuccess: string;
@@ -75,6 +77,13 @@ type BaseCopy = {
   speakerMergedFrom: (labels: string) => string;
   transcriptionLanguageLabel: string;
   transcriptionLanguageNames: Record<"ja" | "en", string>;
+  retryButton: string;
+  retryInProgress: string;
+  retrySuccess: string;
+  retryError: string;
+  retryConfirm: (jobId: string) => string;
+  retryLanguagePrompt: string;
+  retryLanguageInvalid: string;
 };
 
 function jaCopy(): BaseCopy {
@@ -151,6 +160,8 @@ function jaCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `${stage} で失敗しました`,
     failureOccurredAt: (time: string) => `発生日時: ${time}`,
+    failureMessageExpand: "全文を表示",
+    failureMessageCollapse: "折りたたむ",
     titlePlaceholder: "タイトルを入力...",
     titleEditLabel: "タイトルを編集",
     titleSaveSuccess: "タイトルを保存しました。",
@@ -179,6 +190,14 @@ function jaCopy(): BaseCopy {
       ja: "日本語",
       en: "English",
     },
+    retryButton: "再試行",
+    retryInProgress: "再試行中...",
+    retrySuccess: "ジョブを再投入しました。",
+    retryError: "再試行に失敗しました: ",
+    retryConfirm: (jobId: string) => `ジョブ ${jobId} を再試行しますか？`,
+    retryLanguagePrompt:
+      "このジョブには言語情報が保存されていません。文字起こし言語を選んでください: ja または en",
+    retryLanguageInvalid: "言語は ja または en を指定してください。",
   };
 }
 
@@ -257,6 +276,8 @@ function enCopy(): BaseCopy {
     failedAtStage: (stage: string) =>
       `Failed at ${stage}`,
     failureOccurredAt: (time: string) => `Occurred at: ${time}`,
+    failureMessageExpand: "Show full message",
+    failureMessageCollapse: "Collapse",
     titlePlaceholder: "Enter title...",
     titleEditLabel: "Edit title",
     titleSaveSuccess: "Title saved successfully.",
@@ -285,6 +306,14 @@ function enCopy(): BaseCopy {
       ja: "Japanese",
       en: "English",
     },
+    retryButton: "Retry",
+    retryInProgress: "Retrying…",
+    retrySuccess: "Job re-enqueued successfully.",
+    retryError: "Failed to retry job: ",
+    retryConfirm: (jobId: string) => `Retry job ${jobId}?`,
+    retryLanguagePrompt:
+      "This job has no stored language. Please choose the transcription language: ja or en",
+    retryLanguageInvalid: "Language must be either ja or en.",
   };
 }
 

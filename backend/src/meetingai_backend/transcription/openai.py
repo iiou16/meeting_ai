@@ -173,6 +173,11 @@ def _transcribe_single_chunk(
     """Transcribe a single audio chunk with retries. Thread-safe."""
     attempt = 0
     last_exception: Exception | None = None
+    chunk_label = (
+        f"chunk {chunk_index + 1}/{total_chunks} "
+        f"(asset={asset.asset_id}, file={asset.path.name}, "
+        f"range={asset.start_ms}-{asset.end_ms}ms)"
+    )
 
     while attempt < config.max_attempts:
         attempt += 1
@@ -199,40 +204,67 @@ def _transcribe_single_chunk(
             response = exc.response
             status = response.status_code if response is not None else None
             error_text = _safe_response_text(response)
+            elapsed = time.monotonic() - request_start
             if status in _RETRIABLE_STATUS and attempt < config.max_attempts:
                 delay = _select_retry_delay(
                     attempt=attempt,
                     config=config,
                     response=exc.response,
                 )
-                sleep(delay)
-                last_exception = exc
-                continue
-
-            raise TranscriptionError(
-                f"transcription failed with status {status}: {error_text}",
-                asset_id=asset.asset_id,
-                status_code=status,
-            ) from exc
-        except httpx.RequestError as exc:
-            if attempt < config.max_attempts:
-                delay = _select_retry_delay(
-                    attempt=attempt,
-                    config=config,
-                    response=None,
+                logger.warning(
+                    "Transcription of %s failed with status %s after %.1fs "
+                    "(attempt %d/%d); retrying in %.1fs: %s",
+                    chunk_label,
+                    status,
+                    elapsed,
+                    attempt,
+                    config.max_attempts,
+                    delay,
+                    error_text,
                 )
                 sleep(delay)
                 last_exception = exc
                 continue
 
             raise TranscriptionError(
-                "transcription request failed due to network error",
+                f"transcription of {chunk_label} failed with status {status} "
+                f"after {elapsed:.1f}s (attempt {attempt}/{config.max_attempts}): "
+                f"{error_text}",
+                asset_id=asset.asset_id,
+                status_code=status,
+            ) from exc
+        except httpx.RequestError as exc:
+            elapsed = time.monotonic() - request_start
+            if attempt < config.max_attempts:
+                delay = _select_retry_delay(
+                    attempt=attempt,
+                    config=config,
+                    response=None,
+                )
+                logger.warning(
+                    "Transcription of %s failed with network error after %.1fs "
+                    "(attempt %d/%d); retrying in %.1fs: %r",
+                    chunk_label,
+                    elapsed,
+                    attempt,
+                    config.max_attempts,
+                    delay,
+                    exc,
+                )
+                sleep(delay)
+                last_exception = exc
+                continue
+
+            raise TranscriptionError(
+                f"transcription of {chunk_label} failed due to network error "
+                f"after {elapsed:.1f}s (attempt {attempt}/{config.max_attempts}): "
+                f"{exc!r}",
                 asset_id=asset.asset_id,
                 status_code=None,
             ) from exc
         except Exception as exc:
             raise TranscriptionError(
-                "unexpected error during transcription",
+                f"unexpected error during transcription of {chunk_label}: {exc!r}",
                 asset_id=asset.asset_id,
                 status_code=None,
             ) from exc
@@ -260,7 +292,7 @@ def _transcribe_single_chunk(
         )
 
     raise TranscriptionError(
-        "exhausted retries while transcribing audio chunk",
+        f"exhausted retries while transcribing {chunk_label}",
         asset_id=asset.asset_id,
         status_code=None,
     ) from last_exception

@@ -101,6 +101,13 @@ def _validate_settings(settings: Settings) -> None:
 
 def run_worker() -> None:
     """Start an RQ worker listening on the configured queue."""
+    # start-backend.sh は `python -c "...run_worker()"` で起動するため、
+    # __main__ ブロックではなくここでログ設定を行う。未設定だとタスク内の
+    # INFO/WARNING ログ (チャンクごとの進捗やリトライ) が出力されない。
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     settings = get_settings()
     _validate_settings(settings)
     connection = Redis.from_url(settings.redis_url)
@@ -137,8 +144,4 @@ __all__ = ["run_worker"]
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
     run_worker()

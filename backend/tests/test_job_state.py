@@ -10,11 +10,18 @@ import pytest
 
 from meetingai_backend.job_state import (
     JobFailureRecord,
+    consume_job_failure,
     load_job_failure,
+    load_job_language,
     load_job_title,
     load_recorded_at,
+    load_source_path,
+    mark_job_failed,
+    restore_job_failure,
+    save_job_language,
     save_job_title,
     save_recorded_at,
+    save_source_path,
 )
 
 _JST = timezone(timedelta(hours=9))
@@ -190,3 +197,55 @@ class TestSaveAndLoadRecordedAt:
         )
         with pytest.raises(ValueError, match="Expected dict"):
             load_recorded_at(tmp_path)
+
+
+class TestJobLanguage:
+    def test_round_trip(self, tmp_path: Path) -> None:
+        save_job_language(tmp_path, language="en")
+        assert load_job_language(tmp_path) == "en"
+
+    def test_missing_returns_none(self, tmp_path: Path) -> None:
+        assert load_job_language(tmp_path) is None
+
+
+class TestSourcePath:
+    def test_round_trip(self, tmp_path: Path) -> None:
+        source = tmp_path / "meeting.mp4"
+        source.write_bytes(b"x")
+        save_source_path(tmp_path, source_path=source)
+        loaded = load_source_path(tmp_path)
+        assert loaded == source.resolve()
+
+    def test_missing_returns_none(self, tmp_path: Path) -> None:
+        assert load_source_path(tmp_path) is None
+
+
+class TestConsumeJobFailure:
+    def test_consume_returns_record_and_removes_marker(self, tmp_path: Path) -> None:
+        mark_job_failed(tmp_path, stage="transcription", error=RuntimeError("boom"))
+        record = consume_job_failure(tmp_path)
+        assert record is not None
+        assert record.stage == "transcription"
+        assert record.message == "boom"
+        assert (tmp_path / "job_failed.json").exists() is False
+
+    def test_consume_when_no_marker_returns_none(self, tmp_path: Path) -> None:
+        assert consume_job_failure(tmp_path) is None
+
+    def test_concurrent_consume_only_one_wins(self, tmp_path: Path) -> None:
+        mark_job_failed(tmp_path, stage="summary", error=RuntimeError("x"))
+        first = consume_job_failure(tmp_path)
+        second = consume_job_failure(tmp_path)
+        assert first is not None
+        assert second is None
+
+    def test_restore_round_trip_preserves_occurred_at(self, tmp_path: Path) -> None:
+        mark_job_failed(tmp_path, stage="upload", error=RuntimeError("x"))
+        record = consume_job_failure(tmp_path)
+        assert record is not None
+        restore_job_failure(tmp_path, record=record)
+        reloaded = load_job_failure(tmp_path)
+        assert reloaded is not None
+        assert reloaded.stage == record.stage
+        assert reloaded.message == record.message
+        assert reloaded.occurred_at == record.occurred_at
